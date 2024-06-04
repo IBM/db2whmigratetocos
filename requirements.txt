@@ -1,0 +1,4 @@
+click==8.1.7
+setuptools==70.0.0
+wheel==0.43.0
+pyodbc
