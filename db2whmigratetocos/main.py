@@ -1,6 +1,6 @@
 
 import typer
-from db2whmigratetocos.db2wh_db2_utilities import db2wh_pyodbc_connection, get_tables_under_tablespace_in_db2woc
+from db2whmigratetocos.db2wh_db2_utilities import adm_move_table_ops_db2woc, db2wh_pyodbc_connection, get_table_move_time_estimate_in_db2woc, get_tables_under_tablespace_in_db2woc
 from .db2whmigratetocos_install_prereq import db2whmigratetocos_init
 from typing_extensions import Annotated
 from rich.console import Console
@@ -43,10 +43,27 @@ def move(
     db2wh_pyodbc_connection(user_id,password,hostname,port,database,True)
     if db2wh == "db2woc":
         print()
+        print()
         console.print("Initiating the Data Movement in Db2woc instance")
         console.print("DEFAULT SOURCE - USERSPACE1 : DEAFULT DESTINATION - OBJSTORESPACE1")
         print()
-        get_tables_under_tablespace_in_db2woc(user_id,password,hostname,port,database,"USERSPACE1")
+        estimate_size,tables_in_userspace= get_tables_under_tablespace_in_db2woc(user_id,password,hostname,port,database,"USERSPACE1")
+        time_taken = get_table_move_time_estimate_in_db2woc(user_id,password,hostname,port,database)
+        print(estimate_size)
+        print(time_taken)
+        print(estimate_size * time_taken)
+        print("Do you want to proceed?")
+        accept = input("Enter if you want to proceed, one of the following options:\n 1.Accept\n 2.Decline\n")
+        if int(accept) == 1:
+            print("Initiating the migration for each of the table, proceeding with next steps....")
+            for items in tables_in_userspace:
+                 adm_move_table_ops_db2woc(user_id,password,hostname,port,database,items[1],items[0])
+        else:
+            print("Aboritng the migration process")
+        
+        
+
+       
         
  
     
