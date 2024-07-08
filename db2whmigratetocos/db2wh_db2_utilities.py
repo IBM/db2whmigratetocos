@@ -5,7 +5,7 @@ import time
 import pyodbc
 from rich.console import Console
 from rich.table import Table
-import pandas as pd
+
 
 
 from db2whmigratetocos.constants import SAMPLE_DATA
