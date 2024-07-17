@@ -48,16 +48,16 @@ def move(
         console.print("DEFAULT SOURCE - USERSPACE1 : DEAFULT DESTINATION - OBJSTORESPACE1")
         print()
         estimate_size,tables_in_userspace= get_tables_under_tablespace_in_db2woc(user_id,password,hostname,port,database,"USERSPACE1")
-        time_taken = get_table_move_time_estimate_in_db2woc(user_id,password,hostname,port,database)
-        print(estimate_size)
-        print(time_taken)
-        print(estimate_size * time_taken)
+        # time_taken = get_table_move_time_estimate_in_db2woc(user_id,password,hostname,port,database)
+        # print(estimate_size)
+        # print(time_taken)
+        # print(estimate_size * time_taken)
         print("Do you want to proceed?")
         accept = input("Enter if you want to proceed, one of the following options:\n 1.Accept\n 2.Decline\n")
         if int(accept) == 1:
             print("Initiating the migration for each of the table, proceeding with next steps....")
             for items in tables_in_userspace:
-                 adm_move_table_ops_db2woc(user_id,password,hostname,port,database,items[1],items[0])
+                 adm_move_table_ops_db2woc(user_id,password,hostname,port,database,items[1],items[0],"INIT")
         else:
             print("Aboritng the migration process")
         

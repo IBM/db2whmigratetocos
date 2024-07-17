@@ -6,10 +6,8 @@ import pyodbc
 from rich.console import Console
 from rich.table import Table
 
-
-
 from db2whmigratetocos.constants import SAMPLE_DATA
-from db2whmigratetocos.queries import  ADM_MOVE_TABLE_CMD_DB2WOC, ADM_MOVE_TABLE_CMD_DB2WOC_MOVE, DRP_SAM_TABLE, LIST_TABLES_IN_TSPACE, LIST_TBSPACES, SAMPLE_TABLE, TAB_SIZE
+from db2whmigratetocos.queries import  ADM_MOVE_TABLE_CLEANUP_ERROR_STATE, ADM_MOVE_TABLE_CMD_DB2WOC, ADM_MOVE_TABLE_CMD_DB2WOC_MOVE, ADM_MOVE_TABLE_FIND_PHASE, ADM_MOVE_TABLE_PHASE_ERROR_STATE, DRP_SAM_TABLE, LIST_TABLES_IN_TSPACE, LIST_TBSPACES, SAMPLE_TABLE, TAB_SIZE
 console = Console()
 
 
@@ -177,41 +175,84 @@ def admin_move_table_with_move(user:str,password:str,hostname:str,port:str,datab
     except Exception as e:
          print(e)
 
-
-def adm_move_table_ops_db2woc(user:str,password:str,hostname:str,port:str,database:str,schemaname:str,tablename:str):
+def find_adm_status_for_a_table(user:str,password:str,hostname:str,port:str,database:str,tablename:str):
     try:
-        cnxn = db2wh_pyodbc_connection(user,password,hostname,port,database,False)
+        table_phase = " "
+        connection_string = get_connection_string(user,password,hostname,port,database)
+        cnxn = pyodbc.connect(connection_string+"LONGDATACOMPAT=1;")
         conn = cnxn.cursor()
-
-        print("INIT PHASE for {TABLENAME}".format(TABLENAME=tablename))
-        conn.execute(ADM_MOVE_TABLE_CMD_DB2WOC.format(SCHEMANAME = schemaname,TABLENAME=tablename,OPTION='INIT'))
+        conn.execute(ADM_MOVE_TABLE_FIND_PHASE.format(TABLENAME=tablename))
         rows = conn.fetchall()
+        print(rows)
         for item in rows:
-            if item[0] == 'INIT_START':
-                init_start = item[1]
-            if item[0] == 'STATUS' and item[1] == 'COPY':
-                 print("COPY PHASE for {TABLENAME}".format(TABLENAME=tablename))
-                 conn.execute(ADM_MOVE_TABLE_CMD_DB2WOC.format(SCHEMANAME = schemaname,TABLENAME=tablename,OPTION='COPY'))
-                 rows = conn.fetchall()
-                 for item in rows:
-                            if item[0] == 'STATUS' and item[1] == 'REPLAY':
-                                        print("REPLAY PHASE for {TABLENAME}".format(TABLENAME=tablename))
-                                        conn.execute(ADM_MOVE_TABLE_CMD_DB2WOC.format(SCHEMANAME = schemaname,TABLENAME=tablename,OPTION='REPLAY'))
-                                        rows = conn.fetchall()
-                                        for item in rows:
-                                            if item[0] == 'STATUS' and  item[1] == 'REPLAY': 
-                                                print("SWAP PHASE for {TABLENAME}".format(TABLENAME=tablename))
-                                                conn.execute(ADM_MOVE_TABLE_CMD_DB2WOC.format(SCHEMANAME = schemaname,TABLENAME=tablename,OPTION='SWAP'))
-                                                rows = conn.fetchall()
-                                                for item in rows:
-                                                    if item[0] == 'CLEANUP_END':
-                                                        cleanup_end = item[1]
-                                                    if item[0] == 'STATUS' and item[1] == 'COMPLETE':
-                                                        print("Movement COMPLETE for {TABLENAME}".format(TABLENAME=tablename))
-                                                        init_time = datetime.datetime.strptime(init_start, "%Y-%m-%d-%H.%M.%S.%f") 
-                                                        cleanup_end = datetime.datetime.strptime(cleanup_end, "%Y-%m-%d-%H.%M.%S.%f")
-                                                        time_taken= int((cleanup_end - init_time).total_seconds())
-                                                        print("Movement COMPLETE in" + str(time_taken))
-                                                        conn.close()
+             if item[0] == 'STATUS':
+                  print(table_phase)
+                  table_phase = item[1]
+                  return table_phase
     except Exception as e:
          print(e)
+   
+
+def adm_move_table_ops_db2woc(user:str,password:str,hostname:str,port:str,database:str,schemaname:str,tablename:str,status:str):
+    try:
+        init_start = ""
+        cleanup_end = ""
+        while status !="COMPLETE":
+            print("INIT Phase for {TABLENAME}".format(TABLENAME=tablename))
+            status,init_start,cleanup_end = adm_move_table_phase(user,password,hostname,port,database,schemaname,tablename,"INIT")
+            if status == "INIT":
+                status,init_start,cleanup_end = adm_move_table_phase(user,password,hostname,port,database,schemaname,tablename,"INIT")
+            if status == "COPY":
+                print("COPY Phase for {TABLENAME}".format(TABLENAME=tablename))
+                status,init_start,cleanup_end = adm_move_table_phase(user,password,hostname,port,database,schemaname,tablename,"COPY")
+            if status == "REPLAY":
+                print("REPLAY Phase for {TABLENAME}".format(TABLENAME=tablename))
+                status,init_start,cleanup_end = adm_move_table_phase(user,password,hostname,port,database,schemaname,tablename,"REPLAY")
+                print("SWAP Phase for {TABLENAME}".format(TABLENAME=tablename))
+                status,init_start,cleanup_end = adm_move_table_phase(user,password,hostname,port,database,schemaname,tablename,"SWAP")
+                if status == "COMPLETE":
+                    init_time = datetime.datetime.strptime(init_start, "%Y-%m-%d-%H.%M.%S.%f") 
+                    cleanup_end = datetime.datetime.strptime(cleanup_end, "%Y-%m-%d-%H.%M.%S.%f")
+                    time_taken= int((cleanup_end - init_time).total_seconds())
+                    print("Movement COMPLETE for {TABLENAME} in".format(TABLENAME=tablename) + str(time_taken))
+    except Exception as e:
+        print(e)
+                  
+def adm_move_table_phase(user:str,password:str,hostname:str,port:str,database:str,schemaname:str,tablename:str,phase:str):
+        init_start = ""
+        cleanup_end = ""
+        try:
+            cnxn = db2wh_pyodbc_connection(user,password,hostname,port,database,False)
+            conn = cnxn.cursor()
+            conn.execute(ADM_MOVE_TABLE_CMD_DB2WOC.format(SCHEMANAME = schemaname,TABLENAME=tablename,OPTION=phase))
+            rows = conn.fetchall()
+            for item in rows:
+                if item[0] == 'INIT_START':
+                    init_start = item[1]
+                if item[0] == 'STATUS':
+                    status = item[1]
+                if item[0] == 'CLEANUP_END':
+                    cleanup_end = item[1]
+            return status,init_start,cleanup_end
+        except Exception as e:
+            print(e.args)
+            x,y = e.args
+            print(x)
+            print(y)
+            if ADM_MOVE_TABLE_PHASE_ERROR_STATE in y:
+                     status = find_adm_status_for_a_table(user,password,hostname,port,database,tablename)
+                     print("Error: " + ADM_MOVE_TABLE_PHASE_ERROR_STATE)
+                     print("Failed in {status} and retrying the movement from the status".format(status=status))
+                     return status,init_start,cleanup_end
+            if ADM_MOVE_TABLE_CLEANUP_ERROR_STATE in y:
+                     status = find_adm_status_for_a_table(tablename)
+                     print("Error: " + ADM_MOVE_TABLE_CLEANUP_ERROR_STATE)
+                     print("Cleaning up the failed movement and retrying the movement from INIT")
+                     if status != "COMPLETE" or "CLEANUP":
+                        status,init_start,cleanup_end = adm_move_table_phase(user,password,hostname,port,database,schemaname,tablename,"CANCEL")
+                        status,init_start,cleanup_end = adm_move_table_phase(user,password,hostname,port,database,schemaname,tablename,"TERM")
+                        adm_move_table_ops_db2woc(user,password,hostname,port,database,schemaname,tablename,"INIT")
+                     
+                          
+     
+     

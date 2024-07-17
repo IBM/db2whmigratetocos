@@ -5,7 +5,7 @@ import setuptools
 setuptools.setup(
     name="db2whmigratetocos",
     description="A Db2 warehouse CLI utility to move data to NCOS",
-    version="0.1",
+    version="0.2",
     packages=["db2whmigratetocos","db2whmigratetocos.db2_cli_odbc_driver"],
     package_dir={'db2whmigratetocos': 'db2whmigratetocos'},
     package_data={'db2whmigratetocos':['db2_cli_odbc_driver/*']},

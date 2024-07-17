@@ -1,5 +1,4 @@
 import subprocess
-import pandas as pd
 import pyodbc
 # Create a new table called test_table in tablespace T1
 
@@ -14,7 +13,7 @@ def get_connection_string(user:str,password:str,hostname:str,port:str,database:s
     Pass = "Pwd="+password+";"
     Security ="Security=ssl;"
     Protocol="Protocol=TCPIP;"
-    con_str = Driver+Database+Hostname+Port+Uid+Pass+Security+Protocol
+    con_str = Driver+Database+Hostname+Port+Uid+Pass+Security+Protocol+"LONGDATACOMPAT=1;LOBMAXCOLUMNSIZE=10485875;"
     return con_str
 
 def check_home_path():
@@ -37,56 +36,13 @@ def db2wh_pyodbc_connection(user:str,password:str,hostname:str,port:str,database
         except Exception as e:
             print(e) 
 
-print("Create a new schema called TEST")
-cnxn = db2wh_pyodbc_connection("db2inst1","bf5aa381b75a1a09","blueark-test-large-db2woc.us-south.dev.db2w.cloud.ibm.com","50001","BLUDB")
-conn = cnxn.cursor()
-sql = "CREATE SCHEMA DB2WHTEST"
-conn.execute(sql)
-conn.commit()
-conn.close()
-
-cnxn = db2wh_pyodbc_connection("db2inst1","bf5aa381b75a1a09","blueark-test-large-db2woc.us-south.dev.db2w.cloud.ibm.com","50001","BLUDB")
-conn = cnxn.cursor()
-print("creating the table")
-sql = "CREATE TABLE DB2WHTEST.DB2WHTESTTABLE (id INT PRIMARY KEY NOT NULL, name VARCHAR(255)) IN USERSPACE1"
-conn.execute(sql)
-conn.commit()
-conn.close()
-
-print("Load the data into the table")
-print("INSERTING")
-for i in range(1, 1001):
+try:
     cnxn = db2wh_pyodbc_connection("db2inst1","bf5aa381b75a1a09","blueark-test-large-db2woc.us-south.dev.db2w.cloud.ibm.com","50001","BLUDB")
     conn = cnxn.cursor()
-    sql = f"INSERT INTO DB2WHTEST.DB2WHTESTTABLE VALUES ({i}, 'Record {i}')"
-    try:
-        print(i)
-        stmt = conn.execute(sql)
-        conn.commit()
-    except Exception as e:
-        print("Error:", e)
-    conn.close()
-
-
-cnxn = db2wh_pyodbc_connection("db2inst1","bf5aa381b75a1a09","blueark-test-large-db2woc.us-south.dev.db2w.cloud.ibm.com","50001","BLUDB")
-conn = cnxn.cursor()
-print("List the data from the table")
-sql = """SELECT * FROM DB2WHTEST.DB2WHTESTTABLE """
-conn.execute(sql)
-print(conn.fetchall())
-
-# Generate sample data
-cnxn = db2wh_pyodbc_connection("db2inst1","bf5aa381b75a1a09","blueark-test-large-db2woc.us-south.dev.db2w.cloud.ibm.com","50001","BLUDB")
-conn = cnxn.cursor()
-print("AMT table")
-params = "CALL SYSPROC.ADMIN_MOVE_TABLE('DB2WHTEST','DB2WHTESTTABLE','OBJSTORESPACE1','OBJSTORESPACE1','OBJSTORESPACE1','','','','','ALLOW_READ_ACCESS','MOVE')"
-output = conn.execute(params)
-print(conn.fetchall())
-
-cnxn = db2wh_pyodbc_connection("db2inst1","bf5aa381b75a1a09","blueark-test-large-db2woc.us-south.dev.db2w.cloud.ibm.com","50001","BLUDB")
-conn = cnxn.cursor()
-print("REPORT")
-ADM_MOVE_REPORT ="CALL SYSPROC.ADMIN_MOVE_TABLE('DB2WHTEST','DB2WHTESTTABLE','OBJSTORESPACE1','OBJSTORESPACE1','OBJSTORESPACE1','','','','','ALLOW_READ_ACCESS','REPORT')"
-conn.execute(ADM_MOVE_REPORT)
-print(conn.fetchall())
+    print("INIT")
+    ADM_MOVE_REPORT = "Select distinct(name), ColType, Length from Sysibm.syscolumns where tbname = 'ADMIN_MOVE_TABLE'"
+    conn.execute(ADM_MOVE_REPORT)
+    print(conn.fetchall())
+except Exception as e:
+    print(e)
 
