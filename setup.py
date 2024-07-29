@@ -14,7 +14,8 @@ setuptools.setup(
         "typer",     
         "setuptools==70.0.0",
         "wheel==0.43.0",
-        "pyodbc"
+        "pyodbc",
+        "pandas"
     ],
     entry_points={
         "console_scripts": [

@@ -7,23 +7,12 @@ from rich.console import Console
 from rich.table import Table
 
 from db2whmigratetocos.constants import SAMPLE_DATA
-from db2whmigratetocos.queries import  ADM_MOVE_TABLE_CLEANUP_ERROR_STATE, ADM_MOVE_TABLE_CMD_DB2WOC, ADM_MOVE_TABLE_CMD_DB2WOC_MOVE, ADM_MOVE_TABLE_FIND_PHASE, ADM_MOVE_TABLE_PHASE_ERROR_STATE, DRP_SAM_TABLE, LIST_TABLES_IN_TSPACE, LIST_TBSPACES, SAMPLE_TABLE, TAB_SIZE
+from db2whmigratetocos.queries import  ADM_MOVE_TABLE_CLEANUP_ERROR_STATE, ADM_MOVE_TABLE_CMD_DB2WOC, ADM_MOVE_TABLE_CMD_DB2WOC_MOVE, ADM_MOVE_TABLE_FIND_PHASE, ADM_MOVE_TABLE_PHASE_ERROR_STATE, ADM_MOVE_TABLE_STRUCK_PHASE, DRP_SAM_TABLE, LIST_SCHEMAS, LIST_TABLES_IN_TSPACE, LIST_TBSPACES, SAMPLE_TABLE, TAB_SIZE
+import multiprocessing as mp
+
 console = Console()
 
 
-def get_connection_string(user:str,password:str,hostname:str,port:str,database:str):
-    home_path = check_home_path()
-    Driver = "Driver={"+home_path.strip()+"/db2_cli_odbc_driver/odbc_cli/clidriver/lib/libdb2o.so};"
-    Database="Database="+database+";"
-    Hostname="Hostname="+hostname+";"
-    Port = "Port="+port+";"
-    Uid = "Uid="+user+";"
-    Pass = "Pwd="+password+";"
-    Security ="Security=ssl;"
-    Protocol="Protocol=TCPIP;"
-    con_str = Driver+Database+Hostname+Port+Uid+Pass+Security+Protocol
-    return con_str
-     
 def check_home_path():
    try:
      HOME = run_command("echo $HOME")
@@ -36,6 +25,120 @@ def run_command(command):
     return result
 
 
+#db2 utility functions
+
+def get_tablespaces_in_block_and_cos(user:str,password:str,hostname:str,port:str,database:str):
+    try:
+            user_tablespaces_list = []
+            cnxn = db2wh_pyodbc_connection(user,password,hostname,port,database,False)
+            conn = cnxn.cursor()
+            conn.execute(LIST_TBSPACES)
+            rows = conn.fetchall()
+            cnxn.close()
+            for item in rows:
+                if "SYS" not in item[0] and "TS4CONSOLE" not in item[0] and "BIGSQLCATUTILITY" not in item[0] and "TEMP" not in item[0]and "TMP" not in item[0]:
+                    user_tablespaces_list.append(item[0])
+            return user_tablespaces_list
+    except Exception as e:
+            print(e) 
+    
+def get_schema_in_instance(user:str,password:str,hostname:str,port:str,database:str):
+    try:
+        user_schemas_list = []
+        cnxn = db2wh_pyodbc_connection(user,password,hostname,port,database,False)
+        conn = cnxn.cursor()
+        conn.execute(LIST_SCHEMAS)
+        rows = conn.fetchall()
+        cnxn.close()
+        for item in rows:
+            if "SYS" not in item[0] and "NULL" not in item[0] and "SQL" not in item[0]:
+                    user_schemas_list.append(item[0])
+            return user_schemas_list
+    except Exception as e:
+            print(e) 
+     
+
+def tab_size_by_table_name(user:str,password:str,hostname:str,port:str,database:str,schemaname:str,tablename:str):
+        try:
+            cnxn = db2wh_pyodbc_connection(user,password,hostname,port,database,False)
+            conn = cnxn.cursor()
+            conn.execute(TAB_SIZE.format(TABSCHEMA = schemaname,TABNAME=tablename))
+            rows = conn.fetchall()
+            cnxn.close()
+            for item in rows:
+                return int(item[0])+int(item[1])+int(item[2])+int(item[3])+int(item[4])+int(item[5])
+        except Exception as e:
+            print(e) 
+
+def get_tables_under_tablespace_in_db2woc(user:str,password:str,hostname:str,port:str,database:str,tablespace:str):
+    try:
+        print("listing the tables")
+        table_names_in_tablespace=[]
+        cnxn= db2wh_pyodbc_connection(user,password,hostname,port,database,False)
+        conn = cnxn.cursor()
+        table_cnt = 0
+        total_estimate_size =0
+        conn.execute(LIST_TABLES_IN_TSPACE.format(TABLESPACE=tablespace))
+        rows = conn.fetchall()  
+        cnxn.close()
+        print(rows)
+        with console.status("") as status:
+            for item in rows:
+                    if  "SYS"  not in item[1]:
+                      if  str(item[0]).endswith('t') == False:
+                        print(item[0])
+                        table_cnt = table_cnt + 1
+                        est_size = tab_size_by_table_name(user,password,hostname,port,database,item[1],item[0])
+                        total_estimate_size += int(est_size)
+                        table_names_in_tablespace.append([item[0],item[1],est_size])
+        return total_estimate_size,table_names_in_tablespace,table_cnt
+    except Exception as e:
+         print(e)
+
+def get_tabname_schemaname_under_tablespace_in_db2woc(user:str,password:str,hostname:str,port:str,database:str,tablespace:str):
+    try:
+        table_names_in_tablespace=[]
+        cnxn= db2wh_pyodbc_connection(user,password,hostname,port,database,False)
+        conn = cnxn.cursor()
+        table_cnt = 0
+        total_estimate_size =0
+        conn.execute(LIST_TABLES_IN_TSPACE.format(TABLESPACE=tablespace))
+        rows = conn.fetchall()  
+        cnxn.close()
+        with console.status("") as status:
+            for item in rows:
+                    if  "SYS"  not in item[1]:
+                            table_names_in_tablespace.append([item[0],item[1]])
+        return table_names_in_tablespace
+    except Exception as e:
+         print(e)
+
+#estimate fucntions
+
+def create_table_for_sample_table(user:str,password:str,hostname:str,port:str,database:str):
+    try:
+        cnxn = db2wh_pyodbc_connection(user,password,hostname,port,database,False)
+        conn = cnxn.cursor()
+        conn.execute(SAMPLE_TABLE)
+        conn.commit()
+        cnxn.close()
+    except Exception as e:
+         print(e)   
+
+def load_data_to_the_sample_table(user:str,password:str,hostname:str,port:str,database:str):
+     try:
+        cnxn = db2wh_pyodbc_connection(user,password,hostname,port,database,False)
+        conn = cnxn.cursor()
+        insert_query = f"INSERT INTO DB2INST1.DB2WHTESTTABLE VALUES (?, ?)"
+        conn.executemany(insert_query, SAMPLE_DATA)
+        conn.commit()
+        cnxn.close()
+     except Exception as e:
+         print(e)
+
+      
+  
+
 def drop_sample_table(user:str,password:str,hostname:str,port:str,database:str):
     try:
         cnxn = db2wh_pyodbc_connection(user,password,hostname,port,database,False)
@@ -43,44 +146,6 @@ def drop_sample_table(user:str,password:str,hostname:str,port:str,database:str):
         conn.execute(DRP_SAM_TABLE)
         conn.commit()
         cnxn.close()
-    except Exception as e:
-         print(e)
-
-
-
-def get_tables_under_tablespace_in_db2woc(user:str,password:str,hostname:str,port:str,database:str,tablespace:str):
-    try:
-        tb_table = Table(title="Tables in {tablespace} in Db2WoC".format(tablespace=tablespace))
-        tb_table.add_column("Table Name", justify="center", style="cyan", no_wrap=True)
-        tb_table.add_column("Schema Name ", style="magenta")
-        tb_table.add_column("Table Size ", style="magenta")
-        table_names_in_tablespace = []
-        cnxn= db2wh_pyodbc_connection(user,password,hostname,port,database,False)
-        conn = cnxn.cursor()
-        table_cnt = 0
-        total_estimate =0
-        conn.execute(LIST_TABLES_IN_TSPACE.format(TABLESPACE=tablespace))
-        rows = conn.fetchall()  
-        cnxn.close()
-        print("Listing all the tables") 
-        with console.status("") as status:
-            for item in rows:
-                    if  "SYS"  not in item[1]:
-                            status.update(
-                                    status="[bold magenta]Estimating each table size",
-                                    spinner="material",
-                                    spinner_style="green",
-                            )
-                            table_cnt = table_cnt + 1
-                            est_size = tab_size_by_table_name(user,password,hostname,port,database,item[1],item[0])
-                            total_estimate += int(est_size)
-                            tb_table.add_row(item[0],item[1],str(est_size))
-                            table_names_in_tablespace.append([item[0],item[1]])
-        console.print("The number of Tables:", table_cnt)
-        console.print(tb_table)
-        console.print("Total estimated size to move is")
-        console.print(total_estimate)
-        return total_estimate,table_names_in_tablespace
     except Exception as e:
          print(e)
 
@@ -96,19 +161,21 @@ def get_table_move_time_estimate_in_db2woc(user:str,password:str,hostname:str,po
      return time_taken_per_kb_in_secs
 
             
+#pyodbc connection fucntions
 
-def tab_size_by_table_name(user:str,password:str,hostname:str,port:str,database:str,schemaname:str,tablename:str):
-        try:
-            cnxn = db2wh_pyodbc_connection(user,password,hostname,port,database,False)
-            conn = cnxn.cursor()
-            conn.execute(TAB_SIZE.format(TABSCHEMA = schemaname,TABNAME=tablename))
-            rows = conn.fetchall()
-            cnxn.close()
-            for item in rows:
-                return int(item[0])+int(item[1])+int(item[2])+int(item[3])+int(item[4])
-        except Exception as e:
-            print(e) 
-              
+def get_connection_string(user:str,password:str,hostname:str,port:str,database:str):
+    home_path = check_home_path()
+    Driver = "Driver={"+home_path.strip()+"/db2_cli_odbc_driver/odbc_cli/clidriver/lib/libdb2o.so};"
+    Database="Database="+database+";"
+    Hostname="Hostname="+hostname+";"
+    Port = "Port="+port+";"
+    Uid = "Uid="+user+";"
+    Pass = "Pwd="+password+";"
+    Security ="Security=ssl;"
+    Protocol="Protocol=TCPIP;"
+    con_str = Driver+Database+Hostname+Port+Uid+Pass+Security+Protocol
+    return con_str
+         
 def db2wh_pyodbc_connection(user:str,password:str,hostname:str,port:str,database:str,test_con:bool):
         try:
             connection_string = get_connection_string(user,password,hostname,port,database)
@@ -129,29 +196,8 @@ def db2wh_pyodbc_connection(user:str,password:str,hostname:str,port:str,database
 
 
      
-def load_data_to_the_sample_table(user:str,password:str,hostname:str,port:str,database:str):
-     try:
-        cnxn = db2wh_pyodbc_connection(user,password,hostname,port,database,False)
-        conn = cnxn.cursor()
-        insert_query = f"INSERT INTO DB2INST1.DB2WHTESTTABLE VALUES (?, ?)"
-        conn.executemany(insert_query, SAMPLE_DATA)
-        conn.commit()
-        cnxn.close()
-     except Exception as e:
-         print(e)
 
-      
-def create_table_for_sample_table(user:str,password:str,hostname:str,port:str,database:str):
-    try:
-        cnxn = db2wh_pyodbc_connection(user,password,hostname,port,database,False)
-        conn = cnxn.cursor()
-        conn.execute(SAMPLE_TABLE)
-        conn.commit()
-        cnxn.close()
-    except Exception as e:
-         print(e)
-
-
+#admin_move_table_functions
 
 def admin_move_table_with_move(user:str,password:str,hostname:str,port:str,database:str,schemaname:str,tablename:str,option:str):
     try:
@@ -175,7 +221,21 @@ def admin_move_table_with_move(user:str,password:str,hostname:str,port:str,datab
     except Exception as e:
          print(e)
 
-def find_adm_status_for_a_table(user:str,password:str,hostname:str,port:str,database:str,tablename:str):
+def find_adm_status_for_struck_table(user:str,password:str,hostname:str,port:str,database:str,tablename:str):
+    try:
+        table_phase = " "
+        connection_string = get_connection_string(user,password,hostname,port,database)
+        cnxn = pyodbc.connect(connection_string+"LONGDATACOMPAT=1;")
+        conn = cnxn.cursor()
+        conn.execute(ADM_MOVE_TABLE_STRUCK_PHASE.format(TABLENAME=tablename))
+        rows = conn.fetchall()
+        cnxn.close()
+        for item in rows:
+             return item[0] 
+    except Exception as e:
+         print(e)
+          
+def find_adm_status_for_a_table(user:str,password:str,hostname:str,port:str,database:str,tablename:str,schemaname:str,src_tbspace:str,dest_tbspace:str):
     try:
         table_phase = " "
         connection_string = get_connection_string(user,password,hostname,port,database)
@@ -183,48 +243,31 @@ def find_adm_status_for_a_table(user:str,password:str,hostname:str,port:str,data
         conn = cnxn.cursor()
         conn.execute(ADM_MOVE_TABLE_FIND_PHASE.format(TABLENAME=tablename))
         rows = conn.fetchall()
-        print(rows)
-        for item in rows:
-             if item[0] == 'STATUS':
-                  print(table_phase)
-                  table_phase = item[1]
-                  return table_phase
+        if len(rows) == 0:
+             actual_table_name = find_adm_status_for_struck_table(user,password,hostname,port,database,tablename)
+             conn.execute(ADM_MOVE_TABLE_FIND_PHASE.format(TABLENAME=actual_table_name))
+             rows = conn.fetchall()
+             for item in rows:
+                table_phase = item[0]
+                print("after finding original name")
+                adm_move_table_phase(user,password,hostname,port,database,schemaname,actual_table_name,"CANCEL",src_tbspace,dest_tbspace)
+                adm_move_table_phase(user,password,hostname,port,database,schemaname,actual_table_name,"TERM",src_tbspace,dest_tbspace)
+                return "INIT"
+        else:
+            print(rows)
+            for item in rows:
+                table_phase = item[0]
+                return table_phase
     except Exception as e:
          print(e)
-   
 
-def adm_move_table_ops_db2woc(user:str,password:str,hostname:str,port:str,database:str,schemaname:str,tablename:str,status:str):
-    try:
-        init_start = ""
-        cleanup_end = ""
-        while status !="COMPLETE":
-            print("INIT Phase for {TABLENAME}".format(TABLENAME=tablename))
-            status,init_start,cleanup_end = adm_move_table_phase(user,password,hostname,port,database,schemaname,tablename,"INIT")
-            if status == "INIT":
-                status,init_start,cleanup_end = adm_move_table_phase(user,password,hostname,port,database,schemaname,tablename,"INIT")
-            if status == "COPY":
-                print("COPY Phase for {TABLENAME}".format(TABLENAME=tablename))
-                status,init_start,cleanup_end = adm_move_table_phase(user,password,hostname,port,database,schemaname,tablename,"COPY")
-            if status == "REPLAY":
-                print("REPLAY Phase for {TABLENAME}".format(TABLENAME=tablename))
-                status,init_start,cleanup_end = adm_move_table_phase(user,password,hostname,port,database,schemaname,tablename,"REPLAY")
-                print("SWAP Phase for {TABLENAME}".format(TABLENAME=tablename))
-                status,init_start,cleanup_end = adm_move_table_phase(user,password,hostname,port,database,schemaname,tablename,"SWAP")
-                if status == "COMPLETE":
-                    init_time = datetime.datetime.strptime(init_start, "%Y-%m-%d-%H.%M.%S.%f") 
-                    cleanup_end = datetime.datetime.strptime(cleanup_end, "%Y-%m-%d-%H.%M.%S.%f")
-                    time_taken= int((cleanup_end - init_time).total_seconds())
-                    print("Movement COMPLETE for {TABLENAME} in".format(TABLENAME=tablename) + str(time_taken))
-    except Exception as e:
-        print(e)
-                  
-def adm_move_table_phase(user:str,password:str,hostname:str,port:str,database:str,schemaname:str,tablename:str,phase:str):
+def adm_move_table_phase(user:str,password:str,hostname:str,port:str,database:str,schemaname:str,tablename:str,phase:str,src_tbspace:str,dest_tbspace:str):
         init_start = ""
         cleanup_end = ""
         try:
             cnxn = db2wh_pyodbc_connection(user,password,hostname,port,database,False)
             conn = cnxn.cursor()
-            conn.execute(ADM_MOVE_TABLE_CMD_DB2WOC.format(SCHEMANAME = schemaname,TABLENAME=tablename,OPTION=phase))
+            conn.execute(ADM_MOVE_TABLE_CMD_DB2WOC.format(SCHEMANAME = schemaname,TABLENAME=tablename,OPTION=phase,SOURCE_TBSPACE=src_tbspace,DEST_TBSPACE=dest_tbspace))
             rows = conn.fetchall()
             for item in rows:
                 if item[0] == 'INIT_START':
@@ -235,23 +278,46 @@ def adm_move_table_phase(user:str,password:str,hostname:str,port:str,database:st
                     cleanup_end = item[1]
             return status,init_start,cleanup_end
         except Exception as e:
-            print(e.args)
             x,y = e.args
-            print(x)
-            print(y)
             if ADM_MOVE_TABLE_PHASE_ERROR_STATE in y:
-                     status = find_adm_status_for_a_table(user,password,hostname,port,database,tablename)
+                     status = find_adm_status_for_a_table(user,password,hostname,port,database,tablename,schemaname,src_tbspace,dest_tbspace)
                      print("Error: " + ADM_MOVE_TABLE_PHASE_ERROR_STATE)
                      print("Failed in {status} and retrying the movement from the status".format(status=status))
                      return status,init_start,cleanup_end
             if ADM_MOVE_TABLE_CLEANUP_ERROR_STATE in y:
-                     status = find_adm_status_for_a_table(tablename)
+                     status = find_adm_status_for_a_table(user,password,hostname,port,database,tablename,schemaname,src_tbspace,dest_tbspace)
                      print("Error: " + ADM_MOVE_TABLE_CLEANUP_ERROR_STATE)
                      print("Cleaning up the failed movement and retrying the movement from INIT")
                      if status != "COMPLETE" or "CLEANUP":
-                        status,init_start,cleanup_end = adm_move_table_phase(user,password,hostname,port,database,schemaname,tablename,"CANCEL")
-                        status,init_start,cleanup_end = adm_move_table_phase(user,password,hostname,port,database,schemaname,tablename,"TERM")
+                        status,init_start,cleanup_end = adm_move_table_phase(user,password,hostname,port,database,schemaname,tablename,"CANCEL",src_tbspace,dest_tbspace)
+                        status,init_start,cleanup_end = adm_move_table_phase(user,password,hostname,port,database,schemaname,tablename,"TERM",src_tbspace,dest_tbspace)
                         adm_move_table_ops_db2woc(user,password,hostname,port,database,schemaname,tablename,"INIT")
+
+def adm_move_table_ops_db2woc(user:str,password:str,hostname:str,port:str,database:str,schemaname:str,tablename:str,status:str,src_tbspace:str,dest_tbspace:str):
+    try:
+        init_start = ""
+        cleanup_end = ""
+        while status !="COMPLETE":
+            print("INIT Phase for {TABLENAME}".format(TABLENAME=tablename))
+            if status == "INIT":
+                status,init_start,cleanup_end = adm_move_table_phase(user,password,hostname,port,database,schemaname,tablename,"INIT",src_tbspace,dest_tbspace)
+            if status == "COPY":
+                print("COPY Phase for {TABLENAME}".format(TABLENAME=tablename))
+                status,init_start,cleanup_end = adm_move_table_phase(user,password,hostname,port,database,schemaname,tablename,"COPY",src_tbspace,dest_tbspace)
+            if status == "REPLAY":
+                print("REPLAY Phase for {TABLENAME}".format(TABLENAME=tablename))
+                status,init_start,cleanup_end = adm_move_table_phase(user,password,hostname,port,database,schemaname,tablename,"REPLAY",src_tbspace,dest_tbspace)
+                print("SWAP Phase for {TABLENAME}".format(TABLENAME=tablename))
+                status,init_start,cleanup_end = adm_move_table_phase(user,password,hostname,port,database,schemaname,tablename,"SWAP",src_tbspace,dest_tbspace)
+                if status == "COMPLETE":
+                    init_time = datetime.datetime.strptime(init_start, "%Y-%m-%d-%H.%M.%S.%f") 
+                    cleanup_end = datetime.datetime.strptime(cleanup_end, "%Y-%m-%d-%H.%M.%S.%f")
+                    time_taken= int((cleanup_end - init_time).total_seconds())
+                    print("Movement COMPLETE for {TABLENAME} in ".format(TABLENAME=tablename) + str(time_taken) + " seconds")
+    except Exception as e:
+        print(e)
+                  
+
                      
                           
      

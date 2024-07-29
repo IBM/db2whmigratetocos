@@ -37,12 +37,15 @@ def db2wh_pyodbc_connection(user:str,password:str,hostname:str,port:str,database
             print(e) 
 
 try:
-    cnxn = db2wh_pyodbc_connection("db2inst1","bf5aa381b75a1a09","blueark-test-large-db2woc.us-south.dev.db2w.cloud.ibm.com","50001","BLUDB")
+    cnxn = db2wh_pyodbc_connection()
     conn = cnxn.cursor()
     print("INIT")
-    ADM_MOVE_REPORT = "Select distinct(name), ColType, Length from Sysibm.syscolumns where tbname = 'ADMIN_MOVE_TABLE'"
-    conn.execute(ADM_MOVE_REPORT)
-    print(conn.fetchall())
+    conn.execute("SELECT SUM(COL_OBJECT_P_SIZE),SUM(DATA_OBJECT_P_SIZE), SUM(INDEX_OBJECT_P_SIZE), SUM(LONG_OBJECT_P_SIZE), SUM(LOB_OBJECT_P_SIZE), SUM(XML_OBJECT_P_SIZE) FROM SYSIBMADM.ADMINTABINFO WHERE TABSCHEMA='BDDATA3' AND TABNAME='\"CATALOG_RETURNSAOyNsTt\"'  GROUP BY TABSCHEMA, TABNAME")
+    rows = conn.fetchall()
+    cnxn.close()
+    print(rows)
+    for item in rows:
+        print(item)
 except Exception as e:
     print(e)
 
