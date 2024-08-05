@@ -7,7 +7,7 @@ from rich.console import Console
 from rich.table import Table
 
 from db2whmigratetocos.constants import SAMPLE_DATA
-from db2whmigratetocos.queries import  ADM_MOVE_TABLE_CLEANUP_ERROR_STATE, ADM_MOVE_TABLE_CMD_DB2WOC, ADM_MOVE_TABLE_CMD_DB2WOC_MOVE, ADM_MOVE_TABLE_FIND_PHASE, ADM_MOVE_TABLE_PHASE_ERROR_STATE, ADM_MOVE_TABLE_STRUCK_PHASE, DRP_SAM_TABLE, LIST_SCHEMAS, LIST_TABLES_IN_TSPACE, LIST_TBSPACES, SAMPLE_TABLE, TAB_SIZE
+from db2whmigratetocos.queries import  ADM_MOVE_TABLE_CLEANUP_ERROR_STATE, ADM_MOVE_TABLE_CMD_DB2WOC, ADM_MOVE_TABLE_CMD_DB2WOC_MOVE, ADM_MOVE_TABLE_FIND_PHASE, ADM_MOVE_TABLE_PHASE_ERROR_STATE, ADM_MOVE_TABLE_STRUCK_PHASE, DRP_SAM_TABLE, LIST_SCHEMAS, LIST_TABLES_IN_SCHEMA, LIST_TABLES_IN_TSPACE, LIST_TBSPACE_BY_TABNAME, LIST_TBSPACES, SAMPLE_TABLE, TAB_SIZE
 import multiprocessing as mp
 
 console = Console()
@@ -56,7 +56,24 @@ def get_schema_in_instance(user:str,password:str,hostname:str,port:str,database:
             return user_schemas_list
     except Exception as e:
             print(e) 
-     
+def get_tables_under_schema_in_db2woc(user:str,password:str,hostname:str,port:str,database:str,schemaname:str):
+    try:
+        tables_in_schema = []
+        total_estimate_size = 0
+        cnxn = db2wh_pyodbc_connection(user,password,hostname,port,database,False)
+        conn = cnxn.cursor()
+        conn.execute(LIST_TABLES_IN_SCHEMA.format(SCHEMANAME=schemaname))
+        rows = conn.fetchall()
+        cnxn.close()
+        table_cnt = len(rows)
+        for item in rows:
+            est_size = " "
+            est_size = tab_size_by_table_name(user,password,hostname,port,database,schemaname,item[0])
+            total_estimate_size += int(est_size)
+            tables_in_schema.append([item[0],est_size])
+        return table_cnt,total_estimate_size,tables_in_schema
+    except Exception as e:
+            print(e) 
 
 def tab_size_by_table_name(user:str,password:str,hostname:str,port:str,database:str,schemaname:str,tablename:str):
         try:
@@ -72,7 +89,6 @@ def tab_size_by_table_name(user:str,password:str,hostname:str,port:str,database:
 
 def get_tables_under_tablespace_in_db2woc(user:str,password:str,hostname:str,port:str,database:str,tablespace:str):
     try:
-        print("listing the tables")
         table_names_in_tablespace=[]
         cnxn= db2wh_pyodbc_connection(user,password,hostname,port,database,False)
         conn = cnxn.cursor()
@@ -81,12 +97,10 @@ def get_tables_under_tablespace_in_db2woc(user:str,password:str,hostname:str,por
         conn.execute(LIST_TABLES_IN_TSPACE.format(TABLESPACE=tablespace))
         rows = conn.fetchall()  
         cnxn.close()
-        print(rows)
         with console.status("") as status:
             for item in rows:
                     if  "SYS"  not in item[1]:
                       if  str(item[0]).endswith('t') == False:
-                        print(item[0])
                         table_cnt = table_cnt + 1
                         est_size = tab_size_by_table_name(user,password,hostname,port,database,item[1],item[0])
                         total_estimate_size += int(est_size)
@@ -112,6 +126,21 @@ def get_tabname_schemaname_under_tablespace_in_db2woc(user:str,password:str,host
         return table_names_in_tablespace
     except Exception as e:
          print(e)
+
+def get_tbpsace_name_for_table(user:str,password:str,hostname:str,port:str,database:str,tablename:str):
+    try:
+        tablespace_name = " "
+        cnxn= db2wh_pyodbc_connection(user,password,hostname,port,database,False)
+        conn = cnxn.cursor()
+        conn.execute(LIST_TBSPACE_BY_TABNAME.format(TABNAME=tablename))
+        rows = conn.fetchall()  
+        cnxn.close()
+        for item in rows:
+             tablespace_name = item[0]
+        return tablespace_name
+    except Exception as e:
+         print(e)
+     
 
 #estimate fucntions
 
@@ -176,7 +205,7 @@ def get_connection_string(user:str,password:str,hostname:str,port:str,database:s
     con_str = Driver+Database+Hostname+Port+Uid+Pass+Security+Protocol
     return con_str
          
-def db2wh_pyodbc_connection(user:str,password:str,hostname:str,port:str,database:str,test_con:bool):
+def db2wh_pyodbc_connection(user:str,password:str,hostname:str,port:str,database:str,test_con:bool) -> bool:
         try:
             connection_string = get_connection_string(user,password,hostname,port,database)
             cnxn = pyodbc.connect(connection_string)
@@ -187,6 +216,7 @@ def db2wh_pyodbc_connection(user:str,password:str,hostname:str,port:str,database
                     rows = conn.fetchall()
                     print("Connected to the Instance - {hostname}".format(hostname=hostname))
                     print("Test Connection Successful")
+                    return True
                  except Exception as e:
                     print(e)
             else:
