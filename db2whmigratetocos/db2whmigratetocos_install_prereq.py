@@ -1,5 +1,6 @@
 import sys
 import subprocess
+import os
 
 
 packagers = ["yum","apt-get"]
@@ -236,7 +237,18 @@ def unzip_the_driver():
          print(".whl file not found..aborting")
    except Exception as e:
       print(e)  
-      
+
+def create_the_logs_folder():
+    print()
+    print("creating the folder to store the logs")
+    try:
+       HOME = run_command("echo $HOME")
+       print(HOME)
+       os.makedirs(HOME.strip()+"/db2whmigratetocos-logs", exist_ok = True) 
+       print("Directory created in :{logs_path}".format(logs_path = HOME+"/db2whmigration-logs" )) 
+    except Exception as e:
+       print(e)
+         
       
 
 def db2migratetocos_env_check():
@@ -262,6 +274,9 @@ def db2whmigratetocos_init():
     print()
     print("Installing and setting up db2 driver")
     unzip_the_driver()
+    print()
+    print("Creating the logs folder")
+    create_the_logs_folder()
     print()
     setup_the_db2_driver()
     print("Final Environment check for all the needed dependencies")

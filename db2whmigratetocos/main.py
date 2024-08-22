@@ -1,15 +1,19 @@
 
+import csv
 from datetime import datetime
+import json
+import os
+import subprocess
 from typing import List
 import pandas as pd
 import typer
-from db2whmigratetocos.db2wh_db2_utilities import adm_move_table_ops_db2woc, db2wh_pyodbc_connection, get_schema_in_instance, get_table_move_time_estimate_in_db2woc, get_tables_under_schema_in_db2woc, get_tables_under_tablespace_in_db2woc, get_tablespaces_in_block_and_cos, get_tabname_schemaname_under_tablespace_in_db2woc, get_tbpsace_name_for_table
+from db2whmigratetocos.db2wh_db2_utilities import  check_home_path, check_if_logs_path_exist_else_create, create_file_for_the_table_migration, create_log_directory_for_migration_run, db2wh_pyodbc_connection, generate_uuid, get_json_format_for_migration_run, get_schema_in_instance, get_table_move_time_estimate_in_db2woc, get_tables_cnt_under_tablespaces, get_tables_under_schema_in_db2woc, get_tables_under_tablespace_in_db2woc, get_tablespaces_in_block_and_cos, get_tabname_schemaname_under_tablespace_in_db2woc, get_tbpsace_name_for_table, unzip_the_adm_script
 from .db2whmigratetocos_install_prereq import db2whmigratetocos_init
+from .admin_move_table_func import adm_move_table_ops_db2woc
 from typing_extensions import Annotated
 from rich.console import Console
 from rich.table import Table
-from rich.live import Live
-from rich.align import Align
+from multiprocessing import Process, Queue, Manager
 
 app = typer.Typer()
 
@@ -44,6 +48,9 @@ def list(
     """
     LIST the tables by tablespaces in detail
     """
+    user_id = "db2inst1"
+    password = "b3888067d52bbb2b"
+    hostname = "db2wh-block-cos-migration-4.us-south.dev.db2w.cloud.ibm.com"
     console.print("Test Connect to the Db2 warehouse instance")
     conn_status =  db2wh_pyodbc_connection(user_id,password,hostname,port,database,True)
     print()
@@ -161,7 +168,6 @@ def list(
                     print("unable to fetch the schemas, check if the instance is up and running")   
                 if all_objects == 'all':
                     schema_list = valid_schema_list
-                    print(schema_list)
                     if schema_list is None:
                         print("Check if the Db2 warehouse instance is up and running")
                 else:
@@ -201,11 +207,11 @@ def list(
                                             count = 0
                                             for table in tables:
                                                 count = count+1
-                                                tb_table.add_row(table[0],str(table[1]))
+                                                sc_table.add_row(table[0],str(table[1]))
                                                 tables_in_schema.append([schema,table[0],table[1]])
                                                 if count >= 75:
                                                     break
-                                            console.print(tb_table)
+                                            console.print(sc_table)
                                     else:
                                             console.print("No tables found in the schema")
                                 if export_csv == True:
@@ -246,46 +252,97 @@ def move(
     """
     Move the tablespaces to COS from Block
     """
-
+    user_id = "db2inst1"
+    password = "b3888067d52bbb2b"
+    hostname = "db2wh-block-cos-migration-4.us-south.dev.db2w.cloud.ibm.com"
     console.print("Test Connect to the Db2 warehouse instance")
     db2wh_pyodbc_connection(user_id,password,hostname,port,database,True)
     print()
     src_db2_obj_list = list.split(",")
     skip_tbspace_list = skip_tbspace.split(",")
     skip_schema_list = skip_schema.split(",")
-    input_list_csv = 'csv' if '.csv' in src_db2_obj_list else None
+    input_list_csv_check = ['csv' for i in src_db2_obj_list if 'csv' in i]
+    if input_list_csv_check:
+       input_list_csv = input_list_csv_check[0]
+    else:
+        input_list_csv = None
+    print(src_db2_obj_list)
     csv_columns =  ['Tablespace', 'Tablename', 'Schema', 'Size', 'Storage']
-    if scope == "tablespace":               
+    if scope == "tablespace":    
+            invalid_csv_column = []       
             invalid_tbspace_list= []
             valid_tbspace_list = get_tablespaces_in_block_and_cos(user_id,password,hostname,port,database)
             all_tablespaces = 'all' if 'all' in src_db2_obj_list else None
             if input_list_csv == 'csv':
+                c = datetime.now()
+                current_time = c.strftime('%d-%m-%Y-%H-%M-%S')
+                directory_name = "migration-tablespace-"+str(current_time)
+                log_directory_name = create_log_directory_for_migration_run(directory_name)
+                processes  = []
                 for item in src_db2_obj_list:
                     if '.csv' in item:
-                        tables_list_in_df = pd.read_csv(filepath=item)
-                        if csv_columns == list(tables_list_in_df):
-                            for index,row in tables_list_in_df:
-                                if row['Tablespace'] in valid_tbspace_list:
-                                    if row['Tablespace'] not in skip_tbspace_list:
-                                        adm_move_table_ops_db2woc(user_id,password,hostname,port,database,row['Schema'],row['Tablename'],"INIT",row['Tablespace'],dest_tbspace)      
-                                    else:
-                                         print("skipping the tablespace as per the input")
-                                else:
-                                     print("the tablespace name is invalid")
+                        csv_file_exists = os.path.isfile(item)
+                        if csv_file_exists:
+                            # tables_column = pd.read_csv(item)
+                            # for column in tables_column.columns():
+                            #     if column not in csv_columns:
+                            #         invalid_csv_column.append(column)
+                            if len(invalid_csv_column) == 0:
+                                with open(item) as f:
+                                    table_csv_reader = csv.DictReader(f)
+                                    tables_in_df = [row for row in table_csv_reader]
+                                    if len(tables_in_df) != 0:
+                                        tables_in_tablespace = []
+                                        for row in tables_in_df:
+                                            if row['Tablespace'] in valid_tbspace_list:
+                                                if row['Tablespace'] not in skip_tbspace_list:
+                                                    tables_in_tablespace=get_tabname_schemaname_under_tablespace_in_db2woc(user_id,password,hostname,port,database,row['Tablespace'])
+                                                    table_exists = False
+                                                    for item in tables_in_tablespace:
+                                                        if row['Tablename'] == item[0]:
+                                                             table_exists = True
+                                                    if table_exists:
+                                                        migration_job_id = generate_uuid()
+                                                        migration_table_details = get_json_format_for_migration_run(row['Schema'],row['Tablename'],"INIT",row['Tablespace'],dest_tbspace,str(migration_job_id))
+                                                        report_file_name_for_the_table = migration_job_id+"-"+row['Tablename']+".json"
+                                                        std_output_name_for_the_file = migration_job_id+"-"+row['Tablename']+".log"
+                                                        std_log_creation_done = create_file_for_the_table_migration(log_directory_name,std_output_name_for_the_file)
+                                                        file_creation_done = create_file_for_the_table_migration(log_directory_name,report_file_name_for_the_table)
+                                                        if file_creation_done:
+                                                            with open(log_directory_name+"/"+report_file_name_for_the_table, 'w') as f:
+                                                                json.dump(migration_table_details,f, indent = 6) 
+                                                        if std_log_creation_done:
+                                                              adm_process = Process(target=adm_move_table_ops_db2woc, args=(user_id,password,hostname,port,database,row['Schema'],row['Tablename'],"INIT",row['Tablespace'],dest_tbspace,log_directory_name+"/"+report_file_name_for_the_table,log_directory_name+"/"+std_output_name_for_the_file))
+                                                              print("Migration ID " + migration_job_id)
+                                                              print("Reports in " + log_directory_name+"/"+report_file_name_for_the_table)
+                                                              processes.append(adm_process)
+                                                       # adm_move_table_ops_db2woc(user_id,password,hostname,port,database,row['Schema'],row['Tablename'],"INIT",row['Tablespace'],dest_tbspace,log_directory_name+"/"+log_file_name_for_the_table)      
+                                                    else:
+                                                      print("Table not found in the tablespace")
+                                                else:
+                                                    print("skipping the tablespace as per the input")
+                                            else:
+                                                print("the tablespace name is invalid")
+                                            
+                            else:
+                                print("Identified invalid column names in the CSV")
+                                print(invalid_csv_column)
+                                  
                         else:
-                            print("Kindly check the column names in the csv provided")
-                            print("Required Format")
-                            print(csv_columns)
-                            print("Provided format")
-                            print(list(tables_list_in_df))
+                            print("Kindly check the if the file path provided is correct")  
+                for process in processes:
+                     process.start() 
+                for process in processes:
+                     process.join()   
+                
             else:
                 if all_tablespaces =='all':
                     tbspace_list = valid_tbspace_list
                 else:
+                    print(valid_tbspace_list)
                     for tbspace in src_db2_obj_list:
-                        if tbspace in valid_tbspace_list:
+                        if tbspace not in valid_tbspace_list:
                             invalid_tbspace_list.append(tbspace)
-                    
                     if len(invalid_tbspace_list)>0:
                         print("skipping invalid tablespaces")
                         print(invalid_tbspace_list)
@@ -295,53 +352,104 @@ def move(
                         tbspace_list =src_db2_obj_list
                     else:
                         tbspace_list = src_db2_obj_list
+                c = datetime.now()
+                current_time = c.strftime('%d-%m-%Y-%H-%M-%S')
+                directory_name = "migration-tablespace-"+str(current_time)
+                log_directory_name = create_log_directory_for_migration_run(directory_name)
+                processes  = []
                 for tbspace in tbspace_list:
                     tables_in_userspace =[]
                     if tbspace not in skip_tbspace_list:
                         tables_in_userspace=get_tabname_schemaname_under_tablespace_in_db2woc(user_id,password,hostname,port,database,tbspace)
                         print("Initiating the migration for each of the table, proceeding with next steps....")
                         tables_cnt = len(tables_in_userspace)
-                        print(tables_cnt)
-                        moved_cnt = 0
                         if len(tables_in_userspace) !=0 :
                             for items in tables_in_userspace:
                                 print()
-                                print(items)
-                                adm_move_table_ops_db2woc(user_id,password,hostname,port,database,items[1],items[0],"INIT",tbspace,dest_tbspace)
-                                print()
-                                moved_cnt = moved_cnt+1
-                                print(str(moved_cnt) + "/" +str(tables_cnt) +" is done ")
-                                print("------------------------------------------------------------------")
-                                if len(tables_in_userspace) == 0:
-                                    print("no tables found in the tablespace")
-                                else:
-                                    print("Skipping the tablespace - " +  tbspace)
+                                migration_job_id = generate_uuid()
+                                migration_table_details = get_json_format_for_migration_run(items[1],items[0],"INIT",tbspace,dest_tbspace,str(migration_job_id))
+                                report_file_name_for_the_table = migration_job_id+"-"+items[0]+".json"
+                                std_output_name_for_the_file = migration_job_id+"-"+items[0]+".log"    
+                                file_creation_done = create_file_for_the_table_migration(log_directory_name,report_file_name_for_the_table)
+                                std_log_creation_done = create_file_for_the_table_migration(log_directory_name,std_output_name_for_the_file)
+                                if file_creation_done:
+                                     with open(log_directory_name+"/"+report_file_name_for_the_table, 'w') as f:
+                                            json.dump(migration_table_details,f, indent = 6) 
+                                if std_log_creation_done:
+                                    adm_process = Process(target=adm_move_table_ops_db2woc, args=(user_id,password,hostname,port,database,items[1],items[0],"INIT",tbspace,dest_tbspace,log_directory_name+"/"+report_file_name_for_the_table,log_directory_name+"/"+std_output_name_for_the_file))
+                                    print("Migration ID " + migration_job_id)
+                                    print("Reports in " + log_directory_name+"/"+report_file_name_for_the_table)
+                                    processes.append(adm_process)
+                                # #std_output_log_file = create_file_for_the_table_migration(log_directory_name,std_output_name_for_the_file)
+                                # file_creation_done = create_file_for_the_table_migration(log_directory_name,report_file_name_for_the_table)
+                                # if file_creation_done:
+                                #     with open(log_directory_name+"/"+report_file_name_for_the_table, 'w') as f:
+                                #         json.dump(migration_table_details,f, indent = 6) 
+                                # command = ["python3","./db2whmigratetocos/admin_move_table_func.py",user_id,password,hostname,port,database,items[1],items[0],"INIT",tbspace,dest_tbspace,log_directory_name+"/"+report_file_name_for_the_table]
+                                # adm_move_for_the_table_process  = subprocess.call(command,text=True)
+                                # if adm_move_for_the_table_process == 0:
+                                #     print("Migration ID - "+ migration_job_id)
+                                #     print("Report in " + log_directory_name+"/"+report_file_name_for_the_table) 
+                                # else:
+                                #     print("Command failed")
+                        if len(tables_in_userspace) == 0:
+                            print("no tables found in the tablespace")
+                    else:
+                            print("Skipping the tablespace - " +  tbspace)
+                for process in processes:
+                     process.start() 
+                for process in processes:
+                     process.join()           
     if scope=="schema":
         invalid_schema_list=[]
+        invalid_csv_column = []
         valid_schema_list = get_schema_in_instance(user_id,password,hostname,port,database)
         all_schemas = 'all' if 'all' in src_db2_obj_list else None
-        if valid_schema_list!= None:
+        if valid_schema_list != None:
             if input_list_csv == 'csv':
+                    c = datetime.now()
+                    current_time = c.strftime('%d-%m-%Y_%H%M%S%f')
+                    directory_name = "migration-schema_"+str(current_time)
+                    log_directory_name = create_log_directory_for_migration_run(directory_name)
                     for item in src_db2_obj_list:
                         if '.csv' in item:
-                            tables_list_in_df = pd.read_csv(filepath=item)
-                            if csv_columns == list(tables_list_in_df):
-                                for index,row in tables_list_in_df:
-                                    if row['Schema'] in schema_list:
-                                        if row['Schema'] not in skip_schema_list:
-                                            adm_move_table_ops_db2woc(user_id,password,hostname,port,database,row['Schema'],row['Tablename'],"INIT",row['Tablespace'],dest_tbspace)   
-                                        else:
-                                            print("skipping the schema as per the input")
+                                csv_file_exists = os.path.isfile(item)
+                                if csv_file_exists:
+                                    schema_column = pd.read_csv(item)
+                                    for column in list(schema_column):
+                                        if column not in csv_columns:
+                                            invalid_csv_column.append(column)
+                                    if len(invalid_csv_column) == 0:
+                                        with open(item) as f:
+                                            table_csv_reader = csv.DictReader(f)
+                                            tables_in_df = [row for row in table_csv_reader]
+                                            if len(tables_in_df) != 0:
+                                                for row in tables_in_df:
+                                                    if row['Schema'] in schema_list:
+                                                        if row['Schema'] not in skip_schema_list:
+                                                                migration_job_id = generate_uuid()
+                                                                migration_table_details = get_json_format_for_migration_run(row['Schema'],row['Tablename'],"INIT",row['Tablespace'],dest_tbspace,str(migration_job_id))
+                                                                log_file_name_for_the_table = migration_job_id+"-"+row['Tablename']+".json"
+                                                                file_creation_done = create_file_for_the_table_migration(log_directory_name,log_file_name_for_the_table)
+                                                                if file_creation_done:
+                                                                    with open(log_directory_name+"/"+log_file_name_for_the_table, 'w') as f:
+                                                                        json.dump(migration_table_details,f, indent = 6) 
+                                                                adm_move_table_ops_db2woc(user_id,password,hostname,port,database,row['Schema'],row['Tablename'],"INIT",row['Tablespace'],dest_tbspace,log_directory_name+"/"+log_file_name_for_the_table) 
+                                                        else:
+                                                            print("skipping the schema as per the input")
+                                                    else:
+                                                        print("The specified schema is not valid")
                                     else:
-                                        print("The specified schema is not valid")
-                            else:
-                                print("Kindly check the column names in the csv provided")
-                                print("Required Format")
-                                print(csv_columns)
-                                print("Provided format")
-                                print(list(tables_list_in_df))
+                                        print("Kindly check the column names in the csv provided")
+                                        print("Required Format")
+                                        print(csv_columns)
+                                        print("Provided format")
+                                        print(list())
+                                else:
+                                    print("kindly check if the file exists in path")
             else:
                 #validation of schema and setting the list for movment
+                print(valid_schema_list)
                 if all_schemas == 'all':
                     schema_list = valid_schema_list
                 else:
@@ -357,6 +465,7 @@ def move(
                             schema_list = src_db2_obj_list
                     else:
                         schema_list = src_db2_obj_list
+                processes = []
                 for schema in schema_list:
                     tables_in_schema =[]
                     if schema not in skip_schema_list:
@@ -365,36 +474,133 @@ def move(
                         print(tota_size)
                         print("Initiating the migration for each of the table, proceeding with next steps....")
                         if len(tables_in_schema) !=0 :
+                            c = datetime.now()
+                            current_time = c.strftime('%d-%m-%Y-%H-%M-%S')
+                            directory_name = "migration-schema-"+str(current_time)
+                            log_directory_name = create_log_directory_for_migration_run(directory_name)
                             for item in tables_in_schema:
                                 source_tablespace = get_tbpsace_name_for_table(user_id,password,hostname,port,database,item[0])
                                 if source_tablespace not in dest_tbspace:
-                                    adm_move_table_ops_db2woc(user_id,password,hostname,port,database,schema,items[0],"INIT",source_tablespace,dest_tbspace)
-                                    print()
-                                    moved_cnt = moved_cnt+1
-                                    print(str(moved_cnt) + "/" +str(tables_cnt) +" is done ")
-                                    print("------------------------------------------------------------------")
+                                     migration_job_id = generate_uuid()
+                                     migration_table_details = get_json_format_for_migration_run(schema,item[0],"INIT",source_tablespace,dest_tbspace,str(migration_job_id))
+                                     report_file_name_for_the_table = migration_job_id+"-"+item[0]+".json"
+                                     std_output_name_for_the_file = migration_job_id+"-"+item[0]+".log"    
+                                     file_creation_done = create_file_for_the_table_migration(log_directory_name,report_file_name_for_the_table)
+                                     std_log_creation_done = create_file_for_the_table_migration(log_directory_name,std_output_name_for_the_file)
+                                     if file_creation_done:
+                                          with open(log_directory_name+"/"+report_file_name_for_the_table, 'w') as f:
+                                             json.dump(migration_table_details,f, indent = 6) 
+                                     if std_log_creation_done:
+                                         adm_process = Process(target=adm_move_table_ops_db2woc, args=(user_id,password,hostname,port,database,schema,item[0],"INIT",source_tablespace,dest_tbspace,log_directory_name+"/"+report_file_name_for_the_table,log_directory_name+"/"+std_output_name_for_the_file))
+                                         print("Migration ID " + migration_job_id)
+                                         print("Reports in " + log_directory_name+"/"+report_file_name_for_the_table)
+                                         processes.append(adm_process)
                         if len(tables_in_schema) == 0:
                                 print("no tables found in the schema")
                     else:
                         print("Skipping the schema - " +  schema)
+                for process in processes:
+                     process.start() 
+                for process in processes:
+                     process.join()     
         else:
             print("Kindly check the schema list that is provided as input")
+    
             
-            
+
+@app.command()
+def status(
+
+    user_id: Annotated[str, typer.Option(help="User Id to connect to Db2 warehouse Instance")],
+    password: Annotated[str, typer.Option(help="Password of the User ID")],
+    hostname: Annotated[str, typer.Option(help="Hostname of the Db2 warehouse Instance")],
+    database:Annotated[str,typer.Option(help="Database to be connected")] ="BLUDB",
+    port: Annotated[str, typer.Option(help="Port to be used for Db2 warehouse Instance")]="50001"):
+    
+    '''
+    Status and the metrics of the migration jobs
+    '''
+    user_id = "db2inst1"
+    password = "b3888067d52bbb2b"
+    hostname = "db2wh-block-cos-migration-4.us-south.dev.db2w.cloud.ibm.com"
+    tablespaces_in_instance = get_tablespaces_in_block_and_cos(user_id,password,hostname,port,database)
+    tables_in_block =[]
+    tables_in_cos = []
+    total_tables_in_block = 0
+    if len(tablespaces_in_instance) != 0:
+        for tablespace in tablespaces_in_instance:
+                table_in_tbspace = get_tables_cnt_under_tablespaces(user_id,password,hostname,port,database,tablespace)
+                if "OBJ" not in tablespace :
+                    total_tables_in_block = total_tables_in_block +table_in_tbspace
+                    tables_in_block.append([tablespace,table_in_tbspace])
+                else:
+                    tables_in_cos.append([tablespace,table_in_tbspace])
+    console.rule("[bold red]Tablespaces in Block")
+    console.print("The tables yet to be moved to COS - {tablescnt}".format(tablescnt = total_tables_in_block))
+    tb_table_block = Table()
+    tb_table_block.add_column("Tablespace",justify="center", style="cyan")
+    tb_table_block.add_column("Table count",justify="center", style="cyan" )
+    for tablespace in tables_in_block:
+        tb_table_block.add_row(tablespace[0],str(tablespace[1]))
+    console.print(tb_table_block)
+    console.rule("[bold red]Tablespaces in COS")
+    tb_table_cos = Table()
+    tb_table_cos.add_column("Tablespace",justify="center", style="cyan")
+    tb_table_cos.add_column("Table count",justify="center", style="cyan" )
+    for tablespace in tables_in_cos:
+        tb_table_cos.add_row(tablespace[0],str(tablespace[1]))
+    console.print(tb_table_cos)
+    console.rule("[bold red]Migration Runs")
+    console.print("Getting you the migration that run from date")
+    HOME = check_home_path()
+    path = HOME.strip()+"/db2whmigratetocos-logs"
+    isExist = os.path.exists(path)
+    migration_job_details = []
+    if isExist:
+        migration_batches = os.listdir(path)
+        if len(migration_batches) > 0:
+            for batch in migration_batches:
+                migration_runs_path= path+"/"+batch
+                migration_runs = os.listdir(migration_runs_path)
+                if len(migration_runs) > 0:
+                    for migration_run in migration_runs:
+                        if ".json" in  migration_run:
+                            jfile = open(migration_runs_path+"/"+migration_run,"r")
+                            data = json.load(jfile)
+                            data['batch_id'] = batch
+                            migration_job_details.append(data)
+            tb_table_migration_runs = Table()
+            tb_table_migration_runs.add_column("Job Id",justify="center", style="cyan")
+            tb_table_migration_runs.add_column("Table Name",justify="center", style="cyan" )
+            tb_table_migration_runs.add_column("Schema Name",justify="center", style="cyan" )
+            # tb_table_migration_runs.add_column("Source Tablespace",justify="center", style="cyan" )
+            # tb_table_migration_runs.add_column("Destination Tablespace",justify="center", style="cyan" )
+            tb_table_migration_runs.add_column("Status",justify="center", style="cyan")
+            tb_table_migration_runs.add_column("Init Time",justify="center", style="cyan")
+            tb_table_migration_runs.add_column("End Time",justify="center", style="cyan")
+            for details in migration_job_details:
+                init_time = " "
+                end_time = " "
+                for phase in details['phase_logs']:
+                    if phase['STATUS'] == "INIT":
+                        init_time = phase['INIT_START']
+                    if phase['STATUS'] == "COMPLETE":
+                        end_time  = phase['CLEANUP_END']
+                tb_table_migration_runs.add_row(str(details['migration_job_id']),str(details['table_name']),details['schema_name'],details['status'],init_time,end_time)
+            console.print(tb_table_migration_runs)
+        else:
+         print("There are no migration runs in the instance yet")
+       
+    else:
+        print("The logs folder is not present")
+        print("Creating the log folder")
+        check_if_logs_path_exist_else_create()
+
+
+
                         
- 
+                
     
-
-
-   
-
-
-
-
-
-
-
-
-   
     
+                
     
