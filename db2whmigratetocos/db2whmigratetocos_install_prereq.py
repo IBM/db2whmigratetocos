@@ -5,11 +5,11 @@ import os
 
 packagers = ["yum","apt-get"]
 yum_odbc = "sudo yum -y install unixODBC"
-yum_pydev = "sudo yum -y  install python3-devel"
+yum_pydev = "sudo yum -y install python3-devel"
 apt_odbc = "sudo apt-get -y install unixodbc"
 apt_pydev = "sudo apt-get -y install python3-dev"
 yum_pip = "yum -y install python-pip"
-apt_pip = "sudo apt-get -y  install python3-pip"
+apt_pip = "sudo apt-get -y install python3-pip"
 #TODO - check for the unixODBC devel
 #TODO - check for the arch other than linux
 
@@ -21,7 +21,7 @@ LICENSE INFORMATION
 The Programs listed below are licensed under the following License Information terms and conditions in addition to the Program license terms previously agreed to by Client and IBM. If Client does not have previously agreed to license terms in effect for the Program, the International License Agreement for Early Release of Programs (Z125-5544-05) applies.
 
 Program Name (Program Number):
-IBM Db2 Migration Block to COS V1.0 Tool (Early Release)
+IBM Db2 Warehouse Migration Block to COS V1.0 Tool (Early Release)
 
 The following standard terms apply to Licensee's use of the Program.
 
@@ -64,11 +64,7 @@ def check_for_package_installer(packager) -> bool:
         return False
 
 def select_packager():
-    print("Installing the needed packages")
     print()
-    print("-----------------------------------------")
-    print("checking the package installer available")
-    print("-----------------------------------------")
     packager_found = False
     for packager in packagers:
         if(check_for_package_installer(packager)):
@@ -84,11 +80,7 @@ def select_packager():
 def install_packages():
     packager = select_packager()
     print("Packager avaiable is: ",packager)  
-   
     if packager == "yum":
-        print("-----------------------------------------")
-        print("Installing the packages using ", packager) 
-        print("-----------------------------------------")
         try:
          print("Installing Python....") 
          yum_pydev_output = run_command(yum_pydev)
@@ -102,9 +94,6 @@ def install_packages():
         except Exception as e:
          print(e)
     if packager == "apt-get":
-        print("-----------------------------------------")
-        print("Installing the packages using ", packager) 
-        print("-----------------------------------------")
         try:
          print("Installing Python....") 
          apt_pydev_output = run_command(apt_pydev)
@@ -137,20 +126,15 @@ def check_and_accept_license_terms():
         print("Unexpected literal provided. Kindly rerun the file to accept")
 
 def run_command(command):
-    print(command)
     result = subprocess.check_output(command, shell=True,text=True)
     return result
     
 def check_python_version():
   print()
-  print("checking the python version...")
-  print("-------------------------------")
   try:
     py_version_output = run_command("python3 --version")
-    print(py_version_output)
     semantic_version = (py_version_output.split(" ")[1]).replace("."," ")
     py_version = float(semantic_version[0]+ '.' + semantic_version[2] + semantic_version[3])
-    print(py_version)
     if(sys.version_info.major > 6):
             print("python version is compatible, works with python 3.6 and above")
     else:
@@ -161,10 +145,8 @@ def check_python_version():
 def setup_the_db2_driver():
     HOME = (run_command("echo $HOME")).strip()
     try:
-       print(run_command("ls"))
-       print(run_command("pwd"))
-       find_db2_driver = run_command("find  db2whmigratetocos/db2_cli_odbc_driver/v11.5.9_linuxx64_odbc_cli.tar.gz")
-       if find_db2_driver.strip() ==  "db2whmigratetocos/db2_cli_odbc_driver/v11.5.9_linuxx64_odbc_cli.tar.gz":
+        find_db2_driver = run_command("find  db2whmigratetocos/db2_cli_odbc_driver/v11.5.9_linuxx64_odbc_cli.tar.gz")
+        if find_db2_driver.strip() ==  "db2whmigratetocos/db2_cli_odbc_driver/v11.5.9_linuxx64_odbc_cli.tar.gz":
             print("Driver v11.5.9_linuxx64_odbc_cli.tar.gz found")
             try:
                 run_command('''
@@ -190,16 +172,15 @@ def setup_the_db2_driver():
                     print(command_executed)
                 except Exception as e:
                     print(e)
-       else:
-          print("The driver package is not found.. aborting")    
+        if "No such file or directory" in find_db2_driver :
+          print("The driver package is not found.. aborting")   
     except Exception as e:
-       print(e)
+       print("The driver package is not found.. aborting")  
+       sys.exit(0)
     
 
 def check_pip_installed():
   print()
-  print("checking if the pip exists ...")
-  print("-------------------------------")
   try:
     py_version_output = run_command("pip3 --version")
     print ("PIP installed")
@@ -207,9 +188,6 @@ def check_pip_installed():
      print ("pip is not installed. Please install pip\n", subprocess.CalledProcessError)
 
 def ODBC_driver_requirements():
-    print()
-    print("Checking the ODBC driver...")
-    print("-------------------------------")
     try:
         odbc_driver_output = run_command("isql --version")
         print ("ODBC driver is installed")
@@ -218,7 +196,7 @@ def ODBC_driver_requirements():
 
 def check_and_Set_home_path():
    print()
-   print("setting up the home path")
+   print("fetching the home path")
    try:
      HOME = run_command("echo $HOME")
      print(HOME)
@@ -248,13 +226,8 @@ def create_the_logs_folder():
        print("Directory created in :{logs_path}".format(logs_path = HOME+"/db2whmigration-logs" )) 
     except Exception as e:
        print(e)
-         
-      
-
+          
 def db2migratetocos_env_check():
-    print("----------------------------------")
-    print("db2migratetocos environment check")
-    print("----------------------------------")
     check_python_version()
     check_pip_installed()
     ODBC_driver_requirements()
@@ -262,23 +235,21 @@ def db2migratetocos_env_check():
 
 def db2whmigratetocos_init():
     print()
-    print("Welcome to IBM Db2migratetocos - An utility to move the data from block storage to COS")
+    print("IBM Db2migratetocos - An utility to move the data from block storage to COS")
     print()
-    print("Read and Accept the license and the terms.")
-    check_and_accept_license_terms()
-    print()
+    # print("Read and Accept the license and the terms.")
+    # check_and_accept_license_terms()
     check_and_Set_home_path()
     print()
     print("Installing the needed packages")
     install_packages()
     print()
-    print("Installing and setting up db2 driver")
+    print("Unpacking and setting up db2 driver")
     unzip_the_driver()
-    print()
+    setup_the_db2_driver()
     print("Creating the logs folder")
     create_the_logs_folder()
     print()
-    setup_the_db2_driver()
     print("Final Environment check for all the needed dependencies")
     db2migratetocos_env_check()
     print()

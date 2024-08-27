@@ -2,7 +2,6 @@
 
 import datetime
 import json
-import pyodbc
 import subprocess
 import argparse
 import logging
@@ -46,6 +45,7 @@ def get_connection_string(user:str,password:str,hostname:str,port:str,database:s
     return con_str
          
 def db2wh_pyodbc_connection(user:str,password:str,hostname:str,port:str,database:str,test_con:bool) -> bool:
+        import pyodbc
         try:
             connection_string = get_connection_string(user,password,hostname,port,database)
             cnxn = pyodbc.connect(connection_string)
@@ -56,6 +56,7 @@ def db2wh_pyodbc_connection(user:str,password:str,hostname:str,port:str,database
 #admin_move_table_functions
 
 def find_adm_status_for_struck_table(user:str,password:str,hostname:str,port:str,database:str,tablename:str):
+    import pyodbc
     try:
         table_phase = " "
         connection_string = get_connection_string(user,password,hostname,port,database)
@@ -70,6 +71,7 @@ def find_adm_status_for_struck_table(user:str,password:str,hostname:str,port:str
          print(e)
           
 def find_adm_status_for_a_table(user:str,password:str,hostname:str,port:str,database:str,tablename:str,schemaname:str,src_tbspace:str,dest_tbspace:str,report_file_name:str):
+    import pyodbc
     try:
         table_phase = " "
         connection_string = get_connection_string(user,password,hostname,port,database)
@@ -235,9 +237,9 @@ def parse_adm_move_table_by_phase(rows:any, phase:str):
     
 
 def adm_move_table_ops_db2woc(user:str,password:str,hostname:str,port:str,database:str,schemaname:str,tablename:str,status:str,src_tbspace:str,dest_tbspace:str, report_file_name:str,log_file_name:str):
-        parent  = parent_process()
-        print(parent.is_alive)
-        print(parent.pid)
+        # parent  = parent_process()
+        # print(parent.is_alive)
+        # print(parent.pid)
         define_logger_file(log_file_name)
         init_start = ""
         cleanup_end = ""

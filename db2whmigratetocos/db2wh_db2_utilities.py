@@ -4,7 +4,7 @@ import json
 import subprocess
 import os
 import uuid 
-import pyodbc
+
 from rich.console import Console
 from rich.table import Table
 
@@ -39,7 +39,6 @@ def get_tablespaces_in_block_and_cos(user:str,password:str,hostname:str,port:str
             conn.execute(LIST_TBSPACES)
             rows = conn.fetchall()
             cnxn.close()
-            print(rows)
             for item in rows:
                 if "SYS" not in item[0] and "TS4CONSOLE" not in item[0] and "BIGSQLCATUTILITY" not in item[0] and "TEMP" not in item[0] and "TMP" not in item[0] :
                     user_tablespaces_list.append(item[0])
@@ -251,6 +250,7 @@ def get_connection_string(user:str,password:str,hostname:str,port:str,database:s
     return con_str
          
 def db2wh_pyodbc_connection(user:str,password:str,hostname:str,port:str,database:str,test_con:bool) -> bool:
+        import pyodbc
         try:
             connection_string = get_connection_string(user,password,hostname,port,database)
             cnxn = pyodbc.connect(connection_string)
@@ -329,7 +329,7 @@ def get_json_format_for_migration_run(schemaname:str,tablename:str,status:str,sr
             "migration_job_id":migration_job_id,
             "source_tablespace":src_tbspace,
             "destination_tablespace":dest_tbspace,
-            "status":"triggered",
+            "status":"REQUEST SUBMITTED",
             "table_name":tablename,
             "schema_name":schemaname,
             "phase_logs":[],
@@ -367,6 +367,7 @@ def admin_move_table_with_move(user:str,password:str,hostname:str,port:str,datab
          print(e)
 
 def find_adm_status_for_struck_table(user:str,password:str,hostname:str,port:str,database:str,tablename:str):
+    import pyodbc
     try:
         table_phase = " "
         connection_string = get_connection_string(user,password,hostname,port,database)
@@ -381,6 +382,7 @@ def find_adm_status_for_struck_table(user:str,password:str,hostname:str,port:str
          print(e)
           
 def find_adm_status_for_a_table(user:str,password:str,hostname:str,port:str,database:str,tablename:str,schemaname:str,src_tbspace:str,dest_tbspace:str,log_file_name:str):
+    import pyodbc
     try:
         table_phase = " "
         connection_string = get_connection_string(user,password,hostname,port,database)
