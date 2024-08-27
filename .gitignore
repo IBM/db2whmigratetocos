@@ -2,5 +2,6 @@ dist/
 build/
 db2whmigratetocos.egg-info/
 .DS_Store
+whl_build.sh
 test.py
-
+*.sh
