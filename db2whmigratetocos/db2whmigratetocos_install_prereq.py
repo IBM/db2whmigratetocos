@@ -1,7 +1,9 @@
 import sys
 import subprocess
 import os
-
+from .constants import PACKAGE_NAME
+from rich.console import Console
+console = Console()
 
 packagers = ["yum","apt-get"]
 yum_odbc = "sudo yum -y install unixODBC"
@@ -13,6 +15,7 @@ apt_pip = "sudo apt-get -y install python3-pip"
 #TODO - check for the unixODBC devel
 #TODO - check for the arch other than linux
 
+OK = "\033[1;32;40m OK  \033[0m  \n"
 
 
 license_text = '''
@@ -55,6 +58,58 @@ P/N:  L-MJAI-C3ZCYF
 
 '''
 
+def check_and_accept_license_terms():
+    print()
+    print("-----------------------------------------------------------------------------------------------------")
+    print("Please read through the license agreement and agree to IBMs terms and conditions to proceed forward")
+    print("-----------------------------------------------------------------------------------------------------")
+    print(license_text)
+    print("-----------------------------------------------------------------------------------------------------")
+    print()
+    try:
+        accept = input("Enter one of the following options:\n 1.Accept\n 2.Decline\n")
+        if int(accept) == 1:
+            print("The License is accepted, proceeding with next steps....")
+        else:
+            print("The License is rejected, cannot continue.")
+            sys.exit(0)
+    except Exception as e:
+        print("Unexpected literal provided. Kindly rerun the file to accept")
+
+def run_command(command):
+    result = subprocess.check_output(command, shell=True,text=True)
+    return result
+    
+
+def check_and_Set_home_path():
+   print()
+   try:
+     HOME = run_command("echo $HOME")
+   except Exception as e:
+      print(e)
+
+def check_the_os_arch():
+    print("Checking the OS")
+    try:
+        cmd ="arch"
+        arch_found =(run_command(cmd)).strip()
+        if arch_found == "x86_64":
+            print("x86_64 found " + OK)
+            print()
+            cmd = "cat /etc/os-release | grep PRETTY_NAME"
+            os_found = ((run_command(cmd)).strip()).split("=")[1]
+            if "Red Hat Enterprise Linux" in os_found:
+                 print("Red Hat Enterprise Linux found")
+            if "9.4" in os_found:
+                print("Version 9.4" + OK)
+        else:
+           print("incompatible with the arch...aborting") 
+           sys.exit(0)          
+    except Exception as e:
+       print(e)
+
+   
+
 def check_for_package_installer(packager) -> bool:
     try:
         packager_output = run_command(packager+" --version")  
@@ -69,17 +124,13 @@ def select_packager():
     for packager in packagers:
         if(check_for_package_installer(packager)):
           packager_found = True
-          package_manager = packager
           return packager
     if not packager_found:
-        print("-----------------------------------------")
-        print("No package installation found")
-        print("-----------------------------------------")
-        return "NONE"
+        return None
  
 def install_packages():
     packager = select_packager()
-    print("Packager avaiable is: ",packager)  
+    print("Packager available is: ",packager)  
     if packager == "yum":
         try:
          print("Installing Python....") 
@@ -106,41 +157,24 @@ def install_packages():
          print(apt_pydev_output)
         except Exception as e:
          print(e)
+    if packager == None:
+       print("NO package installer found")
+       sys.exit(0)       
         
-def check_and_accept_license_terms():
-    print()
-    print("-----------------------------------------------------------------------------------------------------")
-    print("Please read through the license agreement and agree to IBMs terms and conditions to proceed forward")
-    print("-----------------------------------------------------------------------------------------------------")
-    print(license_text)
-    print("-----------------------------------------------------------------------------------------------------")
-    print()
-    try:
-        accept = input("Enter one of the following options:\n 1.Accept\n 2.Decline\n")
-        if int(accept) == 1:
-            print("The License is accepted, proceeding with next steps....")
-        else:
-            print("The License is rejected, cannot continue.")
-            sys.exit(0)
-    except Exception as e:
-        print("Unexpected literal provided. Kindly rerun the file to accept")
-
-def run_command(command):
-    result = subprocess.check_output(command, shell=True,text=True)
-    return result
-    
-def check_python_version():
-  print()
-  try:
-    py_version_output = run_command("python3 --version")
-    semantic_version = (py_version_output.split(" ")[1]).replace("."," ")
-    py_version = float(semantic_version[0]+ '.' + semantic_version[2] + semantic_version[3])
-    if(sys.version_info.major > 6):
-            print("python version is compatible, works with python 3.6 and above")
-    else:
-            print("Python version - " + str(py_version) +  " OK")
-  except  Exception as e:
-     print ("python is not installed. Please install python\n", e)
+def unzip_the_driver():
+   print()
+   print("unziping the driver package") 
+   try:
+      find_whl = run_command("find "+PACKAGE_NAME)
+      if find_whl.strip() == PACKAGE_NAME:
+        unzip_out = run_command("unzip ./"+PACKAGE_NAME+" 'db2whmigratetocos/db2_cli_odbc_driver/*' -d .")
+        print(unzip_out)
+      else:
+         print("Please make sure the command -db22whmigratetocos setup is run where the wheel file present")
+         print(".whl file not found..aborting")
+         sys.exit(0)
+   except Exception as e:
+      print(e) 
 
 def setup_the_db2_driver():
     HOME = (run_command("echo $HOME")).strip()
@@ -148,6 +182,7 @@ def setup_the_db2_driver():
         find_db2_driver = run_command("find  db2whmigratetocos/db2_cli_odbc_driver/v11.5.9_linuxx64_odbc_cli.tar.gz")
         if find_db2_driver.strip() ==  "db2whmigratetocos/db2_cli_odbc_driver/v11.5.9_linuxx64_odbc_cli.tar.gz":
             print("Driver v11.5.9_linuxx64_odbc_cli.tar.gz found")
+            print()
             try:
                 run_command('''
                             mkdir {home}/db2_cli_odbc_driver   
@@ -169,88 +204,77 @@ def setup_the_db2_driver():
             for command in DB2_DRIVER_SETUP:
                 try:
                     command_executed = run_command(command)
-                    print(command_executed)
                 except Exception as e:
                     print(e)
+            print("The needed driver path variables are set")
+            print()
         if "No such file or directory" in find_db2_driver :
-          print("The driver package is not found.. aborting")   
+          print("The driver package is not found.. aborting")  
+          sys.exit(0) 
     except Exception as e:
        print("The driver package is not found.. aborting")  
        sys.exit(0)
-    
 
 def check_pip_installed():
-  print()
+
   try:
     py_version_output = run_command("pip3 --version")
-    print ("PIP installed")
+    print ("PIP installed " + OK)
   except subprocess.CalledProcessError:
      print ("pip is not installed. Please install pip\n", subprocess.CalledProcessError)
+     
+def check_python_version():
+  try:
+    py_version_output = run_command("python3 --version")
+    semantic_version = (py_version_output.split(" ")[1]).replace("."," ")
+    py_version = float(semantic_version[0]+ '.' + semantic_version[2] + semantic_version[3])
+    if(sys.version_info.major > 6):
+            print("python version is compatible, works with python 3.6 and above")
+    else:
+            print("Python version - " + str(py_version) + OK)
+  except  Exception as e:
+     print ("python is not installed. Please install python\n", e)
 
 def ODBC_driver_requirements():
     try:
         odbc_driver_output = run_command("isql --version")
-        print ("ODBC driver is installed")
+        print ("ODBC driver is installed " + OK )
     except subprocess.CalledProcessError:
        print ("ODBC driver is not installed. Please install ODBC driver\n", subprocess.CalledProcessError)
 
-def check_and_Set_home_path():
-   print()
-   print("fetching the home path")
-   try:
-     HOME = run_command("echo $HOME")
-     print(HOME)
-   except Exception as e:
-      print(e)
-
-def unzip_the_driver():
-   print()
-   print("unziping the driver package")  
-   try:
-      find_whl = run_command("find db2whmigratetocos-0.1-py3-none-any.whl")
-      if find_whl.strip() == "db2whmigratetocos-0.1-py3-none-any.whl":
-        unzip_out = run_command("unzip ./db2whmigratetocos-0.1-py3-none-any.whl 'db2whmigratetocos/db2_cli_odbc_driver/*' -d .")
-        print(unzip_out)
-      else:
-         print(".whl file not found..aborting")
-   except Exception as e:
-      print(e)  
-
 def create_the_logs_folder():
-    print()
-    print("creating the folder to store the logs")
     try:
        HOME = run_command("echo $HOME")
-       print(HOME)
        os.makedirs(HOME.strip()+"/db2whmigratetocos-logs", exist_ok = True) 
-       print("Directory created in :{logs_path}".format(logs_path = HOME+"/db2whmigration-logs" )) 
+       print("Directory created in :{logs_path}".format(logs_path = HOME.strip()+"/db2whmigration-logs" )) 
     except Exception as e:
-       print(e)
-          
+       print(e)  
+             
 def db2migratetocos_env_check():
+    print()
     check_python_version()
     check_pip_installed()
     ODBC_driver_requirements()
 
-
 def db2whmigratetocos_init():
     print()
-    print("IBM Db2migratetocos - An utility to move the data from block storage to COS")
-    print()
+    console.print("IBM Db2whmigratetocos - An utility to move the data from block storage to COS",style="italic cyan bold")
+    print() 
+    check_the_os_arch()
     # print("Read and Accept the license and the terms.")
     # check_and_accept_license_terms()
     check_and_Set_home_path()
     print()
-    print("Installing the needed packages")
+    console.print("Installing the needed packages", style="italic")
     install_packages()
     print()
-    print("Unpacking and setting up db2 driver")
+    console.print("Unpacking and setting up db2 driver", style="italic")
     unzip_the_driver()
     setup_the_db2_driver()
-    print("Creating the logs folder")
+    console.print("Creating the logs folder", style="italic")
     create_the_logs_folder()
     print()
-    print("Final Environment check for all the needed dependencies")
+    console.print("Final Environment check for all the needed dependencies", style="italic")
     db2migratetocos_env_check()
     print()
     
