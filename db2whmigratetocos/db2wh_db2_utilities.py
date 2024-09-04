@@ -8,7 +8,6 @@ import uuid
 from rich.console import Console
 from rich.table import Table
 
-from db2whmigratetocos.constants import SAMPLE_DATA
 from db2whmigratetocos.queries import  ADM_MOVE_TABLE_CLEANUP_ERROR_STATE, ADM_MOVE_TABLE_CMD_DB2WOC, ADM_MOVE_TABLE_CMD_DB2WOC_MOVE, ADM_MOVE_TABLE_FIND_PHASE, ADM_MOVE_TABLE_PHASE_ERROR_STATE, ADM_MOVE_TABLE_STRUCK_PHASE, DRP_SAM_TABLE, LIST_SCHEMAS, LIST_TABLES_IN_SCHEMA, LIST_TABLES_IN_TSPACE, LIST_TBSPACE_BY_TABNAME, LIST_TBSPACES, SAMPLE_TABLE, TAB_SIZE
 import multiprocessing as mp
 
@@ -152,65 +151,63 @@ def get_tabname_schemaname_under_tablespace_in_db2woc(user:str,password:str,host
 
 def get_tbpsace_name_for_table(user:str,password:str,hostname:str,port:str,database:str,tablename:str):
     try:
+        valid_tablespace_list = get_tablespaces_in_block_and_cos(user,password,hostname,port,database)
         tablespace_name = " "
         cnxn= db2wh_pyodbc_connection(user,password,hostname,port,database,False)
         conn = cnxn.cursor()
         conn.execute(LIST_TBSPACE_BY_TABNAME.format(TABNAME=tablename))
         rows = conn.fetchall()  
         cnxn.close()
+        print(rows)
         for item in rows:
-             tablespace_name = item[0]
+             if item[0] in valid_tablespace_list:
+                tablespace_name = item[0]
         return tablespace_name
     except Exception as e:
          print(e)
      
 
-#estimate fucntions
+# #estimate fucntions
 
-def create_table_for_sample_table(user:str,password:str,hostname:str,port:str,database:str):
-    try:
-        cnxn = db2wh_pyodbc_connection(user,password,hostname,port,database,False)
-        conn = cnxn.cursor()
-        conn.execute(SAMPLE_TABLE)
-        conn.commit()
-        cnxn.close()
-    except Exception as e:
-         print(e)   
+# def create_table_for_sample_table(user:str,password:str,hostname:str,port:str,database:str):
+#     try:
+#         cnxn = db2wh_pyodbc_connection(user,password,hostname,port,database,False)
+#         conn = cnxn.cursor()
+#         conn.execute(SAMPLE_TABLE)
+#         conn.commit()
+#         cnxn.close()
+#     except Exception as e:
+#          print(e)   
 
-def load_data_to_the_sample_table(user:str,password:str,hostname:str,port:str,database:str):
-     try:
-        cnxn = db2wh_pyodbc_connection(user,password,hostname,port,database,False)
-        conn = cnxn.cursor()
-        insert_query = f"INSERT INTO DB2INST1.DB2WHTESTTABLE VALUES (?, ?)"
-        conn.executemany(insert_query, SAMPLE_DATA)
-        conn.commit()
-        cnxn.close()
-     except Exception as e:
-         print(e)
-
-      
-  
-
-def drop_sample_table(user:str,password:str,hostname:str,port:str,database:str):
-    try:
-        cnxn = db2wh_pyodbc_connection(user,password,hostname,port,database,False)
-        conn = cnxn.cursor()
-        conn.execute(DRP_SAM_TABLE)
-        conn.commit()
-        cnxn.close()
-    except Exception as e:
-         print(e)
-
-def get_table_move_time_estimate_in_db2woc(user:str,password:str,hostname:str,port:str,database:str):
-     print("creating a sample table and schema for movement")
-     create_table_for_sample_table(user,password,hostname,port,database)
-     print("loading the data in sample table and schema for movment")
-     load_data_to_the_sample_table(user,password,hostname,port,database)
-     print("Testing the movement of the sample table")
-     time_taken_per_kb_in_secs =  admin_move_table_with_move(user,password,hostname,port,database,'DB2INST1','DB2WHTESTTABLE','MOVE')
-     print("cleaning the sample table")
-     drop_sample_table(user,password,hostname,port,database)
-     return time_taken_per_kb_in_secs
+# def load_data_to_the_sample_table(user:str,password:str,hostname:str,port:str,database:str):
+#      try:
+#         cnxn = db2wh_pyodbc_connection(user,password,hostname,port,database,False)
+#         conn = cnxn.cursor()
+#         insert_query = f"INSERT INTO DB2INST1.DB2WHTESTTABLE VALUES (?, ?)"
+#         conn.executemany(insert_query, SAMPLE_DATA)
+#         conn.commit()
+#         cnxn.close()
+#      except Exception as e:
+#          print(e)
+# def drop_sample_table(user:str,password:str,hostname:str,port:str,database:str):
+#     try:
+#         cnxn = db2wh_pyodbc_connection(user,password,hostname,port,database,False)
+#         conn = cnxn.cursor()
+#         conn.execute(DRP_SAM_TABLE)
+#         conn.commit()
+#         cnxn.close()
+#     except Exception as e:
+#          print(e)
+# def get_table_move_time_estimate_in_db2woc(user:str,password:str,hostname:str,port:str,database:str):
+#      print("creating a sample table and schema for movement")
+#      create_table_for_sample_table(user,password,hostname,port,database)
+#      print("loading the data in sample table and schema for movment")
+#      load_data_to_the_sample_table(user,password,hostname,port,database)
+#      print("Testing the movement of the sample table")
+#      time_taken_per_kb_in_secs =  admin_move_table_with_move(user,password,hostname,port,database,'DB2INST1','DB2WHTESTTABLE','MOVE')
+#      print("cleaning the sample table")
+#      drop_sample_table(user,password,hostname,port,database)
+#      return time_taken_per_kb_in_secs
 
 def admin_move_table_with_move(user:str,password:str,hostname:str,port:str,database:str,schemaname:str,tablename:str,option:str):
     try:
@@ -341,6 +338,21 @@ def get_json_format_for_migration_run(schemaname:str,tablename:str,status:str,sr
      
 
 #admin_move_table_functions
+
+def find_adm_status_by_tablename(user:str,password:str,hostname:str,port:str,database:str,tablename:str):
+    import pyodbc
+    try:
+        table_phase = " "
+        connection_string = get_connection_string(user,password,hostname,port,database)
+        cnxn = pyodbc.connect(connection_string+"LONGDATACOMPAT=1;")
+        conn = cnxn.cursor()
+        conn.execute(ADM_MOVE_TABLE_FIND_PHASE.format(TABLENAME=tablename))
+        rows = conn.fetchall()
+        for item in rows:
+                table_phase = item[0]
+                return table_phase
+    except Exception as e:
+         print(e)
 
 def admin_move_table_with_move(user:str,password:str,hostname:str,port:str,database:str,schemaname:str,tablename:str,option:str):
     try:

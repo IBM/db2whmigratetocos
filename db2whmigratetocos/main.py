@@ -7,7 +7,7 @@ import subprocess
 from typing import List
 import pandas as pd
 import typer
-from db2whmigratetocos.db2wh_db2_utilities import  check_home_path, check_if_logs_path_exist_else_create, create_file_for_the_table_migration, create_log_directory_for_migration_run, db2wh_pyodbc_connection, generate_uuid, get_json_format_for_migration_run, get_schema_in_instance, get_tables_cnt_under_tablespaces, get_tables_under_schema_in_db2woc, get_tables_under_tablespace_in_db2woc, get_tablespaces_in_block_and_cos, get_tabname_schemaname_under_tablespace_in_db2woc, get_tbpsace_name_for_table
+from db2whmigratetocos.db2wh_db2_utilities import  check_home_path, check_if_logs_path_exist_else_create, create_file_for_the_table_migration, create_log_directory_for_migration_run, db2wh_pyodbc_connection, generate_uuid, get_json_format_for_migration_run, get_schema_in_instance, get_tables_cnt_under_tablespaces, get_tables_under_schema_in_db2woc, get_tables_under_tablespace_in_db2woc, get_tablespaces_in_block_and_cos, get_tabname_schemaname_under_tablespace_in_db2woc, get_tbpsace_name_for_table,find_adm_status_by_tablename
 from .db2whmigratetocos_install_prereq import db2whmigratetocos_init
 from .admin_move_table_func import adm_move_table_ops_db2woc
 from typing_extensions import Annotated
@@ -71,7 +71,7 @@ def list(
     Command:
     \n 
     db2whmigratetocos list  \n
-      --db2-object  schema/tablespace  --list  all  \n
+      --scope  schema/tablespace  --list  all  \n
       --user-id user_id  --password password  --hostname  test.db2w.cloud.ibm.com \n
       --export-csv --detail \n
 
@@ -133,7 +133,7 @@ def list(
                                         else:
                                             tbspace_store = "Block"
                                         print()
-                                        console.rule("[bold red]Tables in Tablespace - {tablespace}".format(tablespace=tbspace))
+                                        console.rule("[bold orange4 italic]Tables in Tablespace - {tablespace}".format(tablespace=tbspace))
                                         total_estimate,tables,table_cnt = get_tables_under_tablespace_in_db2woc(user_id,password,hostname,port,database,tbspace)
                                         tb_table = Table()
                                         tb_table.add_column("Tablename",justify="center", style="cyan")
@@ -551,7 +551,7 @@ def move(
                                                 json.dump(migration_table_details,f, indent = 6) 
                                         if std_log_creation_done:
                                             #adm_process = Process(target=adm_move_table_ops_db2woc, args=(user_id,password,hostname,port,database,schema,item[0],"INIT",source_tablespace,dest_tbspace,log_directory_name+"/"+report_file_name_for_the_table,log_directory_name+"/"+std_output_name_for_the_file))
-                                            print("Table Name" + item[0])
+                                            print("Table Name " + item[0])
                                             print("Migration ID " + migration_job_id)
                                             print("Reports in " + log_directory_name+"/"+report_file_name_for_the_table)
                                             print("Logs in " + log_directory_name+"/"+std_output_name_for_the_file)
@@ -658,6 +658,7 @@ def status(
                         end_time = " "
                         init_bool = False
                         end_bool = False
+                        status = ""
                         for phase in details['phase_logs']:
                             if phase['STATUS'] == "INIT":
                                 init_time = phase['INIT_START']
@@ -665,6 +666,10 @@ def status(
                             if phase['STATUS'] == "COMPLETE":
                                 end_time  = phase['CLEANUP_END']
                                 end_bool = True
+                            if phase['STATUS'] != 'COMPLETE':
+                                status = find_adm_status_by_tablename(user_id,password,hostname,port,database,str(details['table_name']))
+                            else:
+                                 status = details['status']
                         time_taken = "-"
                         init_start = " "
                         cleanup_end = " "
@@ -672,10 +677,11 @@ def status(
                             init_start = datetime.strptime(init_time, "%Y-%m-%d-%H.%M.%S.%f") 
                             cleanup_end = datetime.strptime(end_time, "%Y-%m-%d-%H.%M.%S.%f")
                             time_taken= str(int((cleanup_end - init_start).total_seconds()))
-                        tb_table_migration_runs.add_row(str(details['batch_id']),str(details['migration_job_id']),str(details['table_name']),details['schema_name'],details['status'],details['source_tablespace'],details['destination_tablespace'],time_taken)
+                       
+                        tb_table_migration_runs.add_row(str(details['batch_id']),str(details['migration_job_id']),str(details['table_name']),details['schema_name'],status,details['source_tablespace'],details['destination_tablespace'],time_taken)
                     console.print(tb_table_migration_runs)
                 else:
-                  print("There are no migration runs in the instance yet")
+                  print("There are no migration runs for the instance yet")
             
             else:
                 print("The logs folder is not present")

@@ -70,7 +70,7 @@ def find_adm_status_for_struck_table(user:str,password:str,hostname:str,port:str
     except Exception as e:
          print(e)
           
-def find_adm_status_for_a_table(user:str,password:str,hostname:str,port:str,database:str,tablename:str,schemaname:str,src_tbspace:str,dest_tbspace:str,report_file_name:str):
+def find_adm_status_to_retry(user:str,password:str,hostname:str,port:str,database:str,tablename:str,schemaname:str,src_tbspace:str,dest_tbspace:str,report_file_name:str):
     import pyodbc
     try:
         table_phase = " "
@@ -95,6 +95,8 @@ def find_adm_status_for_a_table(user:str,password:str,hostname:str,port:str,data
     except Exception as e:
          print(e)
 
+
+     
 def cancel_terminate_admin_move_table(user:str,password:str,hostname:str,port:str,database:str,schemaname:str,tablename:str,phase:str,src_tbspace:str,dest_tbspace:str):
         try:
             cnxn = db2wh_pyodbc_connection(user,password,hostname,port,database,False)
@@ -135,7 +137,7 @@ def adm_move_table_phase(user:str,password:str,hostname:str,port:str,database:st
         except Exception as e:
             x,y = e.args
             if ADM_MOVE_TABLE_PHASE_ERROR_STATE in y:
-                    status = find_adm_status_for_a_table(user,password,hostname,port,database,tablename,schemaname,src_tbspace,dest_tbspace, report_file_name)
+                    status = find_adm_status_to_retry(user,password,hostname,port,database,tablename,schemaname,src_tbspace,dest_tbspace, report_file_name)
                     logger.error("Error: " + ADM_MOVE_TABLE_PHASE_ERROR_STATE)
                     log_for_the_phase = {
                           "STATUS":"TERMINATED",
