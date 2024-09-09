@@ -709,8 +709,8 @@ def status(
 
     command:
      db2whmigratetocos status 
-    --user-id <user-id> --password <password> --hostname <host-name>
-
+     --scope migration-runs/tables
+     --user-id <user-id> --password <password> --hostname <host-name>
 
     '''
     try:
