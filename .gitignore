@@ -5,3 +5,5 @@ db2whmigratetocos.egg-info/
 whl_build.sh
 test.py
 *.sh
+*.pyc
+
