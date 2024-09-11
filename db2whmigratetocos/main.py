@@ -146,9 +146,9 @@ def list(
                             for tbspace in tablespace_list:
                                 tbspace_store = " "
                                 if "OBJSTORE" in tbspace:
-                                    tbspace_store = "COS"
+                                    tbspace_store = "cos"
                                 else:
-                                    tbspace_store = "Block"
+                                    tbspace_store = "block-storage"
                                 print()
                                 console.rule(
                                     f"[bold orange4 italic]Tables in Tablespace - {tbspace}")
@@ -184,9 +184,9 @@ def list(
                             if export_csv is True:
                                 console.print("Exporting the data into CSV")
                                 df = pd.DataFrame(tables_list_in_tablespaces, columns=[
-                                                  "Tablespace", "Tablename", "Schema", "Size", "Storage"])
-                                filename = "db2whmigratetocos-"+tbspace + \
-                                    "-tables-list-"+datetime.now().isoformat()+".csv"
+                                                  "tablespace", "tablename", "schema", "size", "storage"])
+                                filename = "db2whmigratetocos-" + \
+                                    "tables-list-"+datetime.now().isoformat()+".csv"
                                 df.to_csv(filename, index=False)
                                 print()
                                 console.print(
@@ -214,9 +214,9 @@ def list(
                                 console.print(
                                     "Exporting the tablespace list into CSV")
                                 df_blk = pd.DataFrame(
-                                    tbs_block, columns=["Tablespace"])
+                                    tbs_block, columns=["tablespace"])
                                 df_cos = pd.DataFrame(
-                                    tbs_cos, columns=["Tablespace"])
+                                    tbs_cos, columns=["tablespace"])
                                 blk_filename = "tbspaces-in-block-"+datetime.now().isoformat()+".csv"
                                 cos_filename = "tbspaces-in-cos-"+datetime.now().isoformat()+".csv"
                                 df_blk.to_csv(blk_filename, index=False)
@@ -306,7 +306,7 @@ def list(
                                 console.print(
                                     "Exporting the schema data into CSV")
                                 df = pd.DataFrame(tables_in_schema, columns=[
-                                                  "Schema", "Tablename", "Size"])
+                                                  "schema", "tablename", "size"])
                                 filename = "db2whmigratetocos-schemas-tables-list-" + \
                                     datetime.now().isoformat()+".csv"
                                 df.to_csv(filename, index=False)
@@ -322,7 +322,7 @@ def list(
                                 console.print(
                                     "Exporting the schema list into CSV")
                                 df = pd.DataFrame(
-                                    schema_list, columns=["Schema"])
+                                    schema_list, columns=["schema"])
                                 filename = "db2whmigratetocos-schemas-list-"+datetime.now().isoformat()+".csv"
                                 df.to_csv(filename, index=False)
                                 console.print(
@@ -384,7 +384,7 @@ def move(
             input_list_csv = input_list_csv_check[0]
         else:
             input_list_csv = None
-        csv_columns = ['Tablespace', 'Tablename', 'Schema', 'Size', 'Storage']
+        csv_columns = ['tablespace', 'tablename', 'schema', 'size', 'storage']
         if scope == "tablespace":
             invalid_csv_column = []
             invalid_tbspace_list = []
@@ -399,13 +399,18 @@ def move(
                     directory_name)
                 for item in src_db2_obj_list:
                     if '.csv' in item:
+                        tables_column = []
                         csv_file_exists = os.path.isfile(item)
                         if csv_file_exists:
-                            # TODO Check the csv columns
-                            # tables_column = pd.read_csv(item)
-                            # for column in tables_column.columns():
-                            #     if column not in csv_columns:
-                            #         invalid_csv_column.append(column)
+                            with open(item, encoding='utf-8') as csv_file:
+                                column_reader = csv.reader(
+                                    csv_file, delimiter=",")
+                                for row in column_reader:
+                                    tables_column = row
+                                    break
+                            for column in tables_column:
+                                if column not in csv_columns:
+                                    invalid_csv_column.append(column)
                             if len(invalid_csv_column) == 0:
                                 with open(item, encoding='utf-8') as f:
                                     table_csv_reader = csv.DictReader(f)
@@ -414,26 +419,26 @@ def move(
                                     if len(tables_in_df) != 0:
                                         tables_in_tablespace = []
                                         for row in tables_in_df:
-                                            if row['Tablespace'] in valid_tbspace_list:
-                                                if row['Tablespace'] not in skip_tbspace_list:
-                                                    if row['Tablespace'] != dest_tbspace:
+                                            if row['tablespace'] in valid_tbspace_list:
+                                                if row['tablespace'] not in skip_tbspace_list:
+                                                    if row['tablespace'] != dest_tbspace:
                                                         tables_in_tablespace = get_tabname_schemaname_under_tablespace_in_db2woc(
-                                                            user_id, password, hostname, port, database, row['Tablespace'])
+                                                            user_id, password, hostname, port, database, row['tablespace'])
                                                         table_exists = False
                                                         for item in tables_in_tablespace:
-                                                            if row['Tablename'] == item[0]:
+                                                            if row['tablename'] == item[0]:
                                                                 table_exists = True
                                                         if table_exists:
                                                             migration_job_id = generate_uuid()
                                                             migration_table_details = get_json_format_for_migration_run(
-                                                                row['Schema'], row['Tablename'], "INIT", row['Tablespace'], dest_tbspace, str(migration_job_id))
+                                                                row['schema'], row['tablename'], "INIT", row['Tablespace'], dest_tbspace, str(migration_job_id))
                                                             report_file_name_for_the_table = migration_job_id + \
                                                                 "-" + \
-                                                                row['Tablename'] + \
+                                                                row['tablename'] + \
                                                                 ".json"
                                                             std_output_name_for_the_file = migration_job_id + \
                                                                 "-" + \
-                                                                row['Tablename'] + \
+                                                                row['tablename'] + \
                                                                 ".log"
                                                             std_log_creation_done = create_file_for_the_table_migration(
                                                                 log_directory_name, std_output_name_for_the_file)
@@ -445,15 +450,15 @@ def move(
                                                                         migration_table_details, f, indent=6)
                                                             if std_log_creation_done:
                                                                 print(
-                                                                    "Table Name" + row['Tablename'])
+                                                                    "Table Name" + row['tablename'])
                                                                 print(
                                                                     "Migration ID " + migration_job_id)
                                                                 print(
                                                                     "Reports in " + log_directory_name+"/"+report_file_name_for_the_table)
                                                                 print(
                                                                     "Logs in " + log_directory_name+"/"+std_output_name_for_the_file)
-                                                                adm_move_table_ops_db2woc(user_id, password, hostname, port, database, row['Schema'], row['Tablename'], "INIT", row[
-                                                                                          'Tablespace'], dest_tbspace, log_directory_name+"/"+report_file_name_for_the_table, log_directory_name+"/"+std_output_name_for_the_file)
+                                                                adm_move_table_ops_db2woc(user_id, password, hostname, port, database, row['schema'], row['tablename'], "INIT", row[
+                                                                                          'tablespace'], dest_tbspace, log_directory_name+"/"+report_file_name_for_the_table, log_directory_name+"/"+std_output_name_for_the_file)
                                                                 # adm_process = Process(target=adm_move_table_ops_db2woc, args=(user_id,password,hostname,port,database,row['Schema'],row['Tablename'],"INIT",row['Tablespace'],dest_tbspace,log_directory_name+"/"+report_file_name_for_the_table,log_directory_name+"/"+std_output_name_for_the_file))
                                                                 # processes.append(adm_process)
                                                         else:
@@ -558,10 +563,15 @@ def move(
                         if '.csv' in item:
                             csv_file_exists = os.path.isfile(item)
                             if csv_file_exists:
-                                # schema_column = pd.read_csv(item)
-                                # for column in list(schema_column):
-                                #     if column not in csv_columns:
-                                #         invalid_csv_column.append(column)
+                                with open(item, encoding='utf-8') as csv_file:
+                                    column_reader = csv.reader(
+                                        csv_file, delimiter=",")
+                                    for row in column_reader:
+                                        tables_column = row
+                                        break
+                                for column in tables_column:
+                                    if column not in csv_columns:
+                                        invalid_csv_column.append(column)
                                 if len(invalid_csv_column) == 0:
                                     with open(item, encoding='utf-8') as f:
                                         table_csv_reader = csv.DictReader(f)
@@ -611,10 +621,10 @@ def move(
                                 else:
                                     print(
                                         "Kindly check the column names in the csv provided")
-                                    print("Required Format")
+                                    print("Required format")
                                     print(csv_columns)
                                     print("Provided format")
-                                    print(list())
+                                    print(invalid_csv_column)
                             else:
                                 print("kindly check if the file exists in path")
                 else:
