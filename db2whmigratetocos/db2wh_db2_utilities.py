@@ -4,14 +4,19 @@
     Licensed Materials - Property of IBM
 
 """
+import csv
+import json
 import subprocess
 import os
+import sys
 import uuid
-
+from datetime import datetime
+import pandas as pd
+from rich.table import Table
 from rich.console import Console
-
-
-from db2whmigratetocos.queries import ADM_MOVE_TABLE_FIND_PHASE, LIST_SCHEMAS, LIST_TABLES_IN_SCHEMA, LIST_TABLES_IN_TSPACE, LIST_TBSPACE_BY_TABNAME, LIST_TBSPACES, TAB_SIZE
+from db2whmigratetocos.admin_move_table_func import adm_move_table_ops_db2woc
+from db2whmigratetocos.constants import SCHEMA_CSV_COLUMNS, TABLESPACE_CSV_COLUMNS
+from db2whmigratetocos.queries import ADM_MOVE_TABLE_FIND_PHASE, LIST_SCHEMAS, LIST_TABLES_IN_SCHEMA, LIST_TABLES_IN_TSPACE, LIST_TBSPACE_BY_TABNAME, LIST_TBSPACES, TAB_SIZE, GET_THE_ROW_COUNT
 
 
 console = Console()
@@ -513,5 +518,298 @@ def find_adm_status_by_tablename(user: str, password: str, hostname: str, port: 
         for item in rows:
             table_phase = item[0]
             return table_phase
+    except Exception as e:
+        print(e)
+
+
+# status utilities
+
+def print_table_row(tables) -> Table:
+    """_summary_
+
+    Args:
+        tables (_type_): _description_
+
+    Returns:
+        Table: _description_
+    """
+    tb_table = Table()
+    tb_table.add_column("Tablespace", justify="center", style="cyan")
+    tb_table.add_column("Table count", justify="center", style="cyan")
+    for tablespace in tables:
+        tb_table.add_row(tablespace[0], str(tablespace[1]))
+    return tb_table
+
+
+def list_migration_runs(migration_batches, path):
+    """_summary_
+
+    Args:
+        migration_batches (_type_): _description_
+    """
+    active_migration_job_details = []
+    completed_migration_job_details = []
+    for batch in migration_batches:
+        migration_runs_path = path+"/"+batch
+        migration_runs = os.listdir(migration_runs_path)
+        if len(migration_runs) > 0:
+            for migration_run in migration_runs:
+                if ".json" in migration_run:
+                    jfile = open(migration_runs_path+"/" +
+                                 migration_run, "r", encoding='utf-8')
+                    data = json.load(jfile)
+                    data['batch_id'] = batch
+                    if data['status'] != "COMPLETE":
+                        active_migration_job_details.append(data)
+                    else:
+                        completed_migration_job_details.append(data)
+    return active_migration_job_details, completed_migration_job_details
+
+
+def parse_the_json_files_for_status(migration_job_details: list, user_id: str, password: str, hostname: str, port: str, database: str, table_header: list, active: bool) -> Table:
+    """_summary_
+
+    Args:
+        migration_job_details (_type_): _description_
+
+    Returns:
+        Table: _description_
+    """
+    tb_table = Table()
+    for table_column_name in table_header:
+        tb_table.add_column(table_column_name, justify="center", style="cyan")
+    for details in migration_job_details:
+        init_time = " "
+        end_time = " "
+        init_bool = False
+        end_bool = False
+        phase_status = ""
+        time_taken = "-"
+        init_start = " "
+        cleanup_end = " "
+        if len(details['phase_logs']) > 0:
+            for phase in details['phase_logs']:
+                if phase['STATUS'] != 'COMPLETE':
+                    phase_status = find_adm_status_by_tablename(
+                        user_id, password, hostname, port, database, str(details['table_name']))
+                else:
+                    phase_status = details['status']
+                if phase['STATUS'] == "INIT":
+                    init_time = phase['INIT_START']
+                    init_bool = True
+                if phase['STATUS'] == "COMPLETE":
+                    end_time = phase['CLEANUP_END']
+                    end_bool = True
+                if init_bool and end_bool:
+                    init_start = datetime.strptime(
+                        init_time, "%Y-%m-%d-%H.%M.%S.%f")
+                    cleanup_end = datetime.strptime(
+                        end_time, "%Y-%m-%d-%H.%M.%S.%f")
+                    time_taken = str(
+                        int((cleanup_end - init_start).total_seconds()))
+        else:
+            phase_status = details['status']
+        if active is True:
+            if phase_status != 'COMPLETE':
+                rows = get_the_rows_moved_in_admin_move_table(
+                    details['schema_name'], details['table_name'], user_id, password, hostname, port, database)
+                tb_table.add_row(str(details['batch_id']), str(details['migration_job_id']), str(details['table_name']), details['schema_name'],
+                                 phase_status + " - " + str(rows), details['source_tablespace'], details['destination_tablespace'], time_taken)
+        else:
+            if phase_status == 'COMPLETE':
+                tb_table.add_row(str(details['batch_id']), str(details['migration_job_id']), str(
+                    details['table_name']), details['schema_name'], phase_status, details['source_tablespace'], details['destination_tablespace'], time_taken)
+    return tb_table
+
+
+# move utilities
+
+def move_the_tables(schema, tablename, source_tablespace, dest_tbspace, log_directory_name, user_id, password, hostname, port, database):
+    """_summary_
+
+    Args:
+        schema (_type_): _description_
+        tablename (_type_): _description_
+        source_tablespace (_type_): _description_
+        dest_tbspace (_type_): _description_
+        log_directory_name (_type_): _description_
+        user_id (_type_): _description_
+        password (_type_): _description_
+        hostname (_type_): _description_
+        port (_type_): _description_
+        database (_type_): _description_
+    """
+    migration_job_id = generate_uuid()
+    migration_table_details = get_json_format_for_migration_run(
+        schema, tablename, "INIT", source_tablespace, dest_tbspace, str(migration_job_id))
+    report_file_name_for_the_table = migration_job_id + "-"+tablename+".json"
+    std_output_name_for_the_file = migration_job_id + "-"+tablename+".log"
+    file_creation_done = create_file_for_the_table_migration(
+        log_directory_name, report_file_name_for_the_table)
+    std_log_creation_done = create_file_for_the_table_migration(
+        log_directory_name, std_output_name_for_the_file)
+    if file_creation_done:
+        with open(log_directory_name+"/"+report_file_name_for_the_table, 'w', encoding='utf-8') as f:
+            json.dump(migration_table_details, f, indent=6)
+    if std_log_creation_done:
+        print("Table Name " + tablename)
+        print("Migration ID " + migration_job_id)
+        print("Reports in " + log_directory_name +
+              "/"+report_file_name_for_the_table)
+        print("Logs in " + log_directory_name+"/"+std_output_name_for_the_file)
+        adm_move_table_ops_db2woc(user_id, password, hostname, port, database, schema, tablename, "INIT", source_tablespace,
+                                  dest_tbspace, log_directory_name+"/"+report_file_name_for_the_table, log_directory_name+"/"+std_output_name_for_the_file)
+
+
+def validate_the_input_db2_objects(input_list, valid_list, obj_name):
+    """_summary_
+
+    Args:
+        input_list (_type_): _description_
+        valid_list (_type_): _description_
+        obj_name (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    invalid_list = []
+    validated_list = []
+    for obj in input_list:
+        if obj not in valid_list:
+            invalid_list.append(obj)
+    if len(invalid_list) > 0:
+        print(f"skipping invalid {obj_name}")
+        print(invalid_list)
+        for obj in valid_list:
+            if obj in invalid_list:
+                input_list.remove(obj)
+        validated_list = input_list
+    else:
+        validated_list = input_list
+    return validated_list
+
+
+def validate_and_get_df_from_the_csv(item):
+    """_summary_
+
+    Args:
+        item (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    invalid_csv_column = []
+    csv_file_exists = os.path.isfile(item)
+    if csv_file_exists:
+        with open(item, encoding='utf-8') as csv_file:
+            column_reader = csv.reader(csv_file, delimiter=",")
+            for row in column_reader:
+                tables_column = row
+                break
+        for column in tables_column:
+            if column not in TABLESPACE_CSV_COLUMNS:
+                invalid_csv_column.append(column)
+        if len(invalid_csv_column) == 0:
+            with open(item, encoding='utf-8') as f:
+                table_csv_reader = csv.DictReader(f)
+                tables_in_df = [row for row in table_csv_reader]
+                return tables_in_df
+        else:
+            print("Identified invalid column names in the CSV")
+            print(invalid_csv_column)
+            sys.exit(0)
+    else:
+        print("Kindly check the if the file path provided is correct")
+        sys.exit(0)
+
+
+def create_a_log_directory_for_a_batch():
+    """_summary_
+    """
+    log_directory_name = ""
+    c = datetime.now()
+    current_time = c.strftime('%d%m%Y-%H%M%S')
+    directory_name = "batch-"+str(current_time)
+    log_directory_name = create_log_directory_for_migration_run(directory_name)
+    return log_directory_name
+
+
+def print_export_tables_in_block_and_cos(tablespace_list, export_csv):
+    """_summary_
+
+    Args:
+        tablespace_list (_type_): _description_
+        export_csv (_type_): _description_
+    """
+    tbs_block = []
+    tbs_cos = []
+    tbs_block_table = Table(show_footer=False)
+    tbs_cos_table = Table(show_footer=False)
+    tbs_block_table.add_column(
+        "TABLESPACES in Block", justify="center", style="cyan", no_wrap=True)
+    tbs_cos_table.add_column(
+        "TABLESPACES in COS", justify="center", style="cyan", no_wrap=True)
+    for row in tablespace_list:
+        if "OBJ" in row:
+            tbs_cos_table.add_row(str(row))
+            tbs_cos.append(str(row))
+        else:
+            tbs_block_table.add_row(str(row))
+            tbs_block.append(str(row))
+    console.print(tbs_block_table)
+    console.print(tbs_cos_table)
+    if export_csv is True:
+        console.print(
+            "Exporting the tablespace list into CSV")
+        df_blk = pd.DataFrame(
+            tbs_block, columns=["tablespace"])
+        df_cos = pd.DataFrame(
+            tbs_cos, columns=["tablespace"])
+        blk_filename = "tbspaces-in-block-"+datetime.now().isoformat()+".csv"
+        cos_filename = "tbspaces-in-cos-"+datetime.now().isoformat()+".csv"
+        df_blk.to_csv(blk_filename, index=False)
+        df_cos.to_csv(cos_filename, index=False)
+        console.print(
+            "The tablespaces in block can be found in " + blk_filename)
+        console.print(
+            "The tablespaces in cos can be found in " + cos_filename)
+
+
+def export_the_data_as_csv(tables, filename_prefix, db2_obj):
+    console.print("Exporting the schema data into CSV")
+    columns = SCHEMA_CSV_COLUMNS if db2_obj in "schema" else TABLESPACE_CSV_COLUMNS
+    df = pd.DataFrame(tables, columns=columns)
+    filename = filename_prefix + datetime.now().isoformat()+".csv"
+    df.to_csv(filename, index=False)
+    console.print("Exporting the list of tables in the schema")
+    print(f"Data saved to CSV file: {filename}")
+
+
+def get_the_rows_moved_in_admin_move_table(schemaname, tablename, user_id, password, hostname, port, database):
+    """_summary_
+
+    Args:
+        schemaname (_type_): _description_
+        tablename (_type_): _description_
+        user_id (_type_): _description_
+        password (_type_): _description_
+        hostname (_type_): _description_
+        port (_type_): _description_
+        database (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    try:
+
+        cnxn = db2wh_pyodbc_connection(
+            user_id, password, hostname, port, database, False)
+        conn = cnxn.cursor()
+        conn.execute(GET_THE_ROW_COUNT.format(
+            TABLENAME=tablename, SCHEMANAME=schemaname))
+        rows = conn.fetchall()
+        cnxn.close()
+        for item in rows:
+            return item[0]
     except Exception as e:
         print(e)
