@@ -610,11 +610,9 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
         else:
             phase_status = details['status']
         if active is True:
-            if phase_status != 'COMPLETE' and phase_status not in "REQUESTED TO":
-                print(details)
+            if phase_status != 'COMPLETE' and "REQUESTED TO" not in phase_status:
                 rows = get_the_rows_moved_in_admin_move_table(
                     details['schema_name'], details['table_name'], user_id, password, hostname, port, database)
-                print(rows)
                 tb_table.add_row(str(details['batch_id']), str(details['migration_job_id']), str(details['table_name']), details['schema_name'],
                                  phase_status + " - " + str(rows), details['source_tablespace'], details['destination_tablespace'], time_taken)
         else:
@@ -803,7 +801,6 @@ def get_the_original_tablename_from_admin_move_table(tablename, user_id, passwor
         _type_: _description_
     """
     import pyodbc
-    print(tablename)
     connection_string = get_connection_string(
         user_id, password, hostname, port, database)
     cnxn = pyodbc.connect(connection_string+"LONGDATACOMPAT=1;")
@@ -812,7 +809,6 @@ def get_the_original_tablename_from_admin_move_table(tablename, user_id, passwor
         TABLENAME=tablename))
     rows = conn.fetchall()
     cnxn.close()
-    print(rows)
     for item in rows:
         return item[0]
 
@@ -842,7 +838,6 @@ def get_the_rows_moved_in_admin_move_table(schemaname, tablename, user_id, passw
     conn.execute(GET_THE_ROW_COUNT.format(
         TABLENAME=table_name, SCHEMANAME=schemaname))
     rows = conn.fetchall()
-    print(rows)
     cnxn.close()
     for item in rows:
         return item[0]
