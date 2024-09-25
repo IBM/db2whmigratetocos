@@ -1,23 +1,47 @@
 {
-"valid_inputs":
-    {
-        "Driver":"{/Users/ruhisehgal/db2_cli_odbc_driver/odbc_cli/clidriver/lib/libdb2o.so}",
-        "Security":"ssl",
-        "Protocol":"TCPIP",
-        "connection_string":"Driver={/Users/ruhisehgal/db2_cli_odbc_driver/odbc_cli/clidriver/lib/libdb2o.so};Database=BLUDB;Hostname=db2wh-block-cos-migration-4.us-south.dev.db2w.cloud.ibm.com;Port=50001;Uid=db2inst1;Pwd=b3888067d52bbb2b;Security=ssl;Protocol=TCPIP;",
+    "valid_inputs": {
+        "Driver": "{/root/db2_cli_odbc_driver/odbc_cli/clidriver/lib/libdb2o.so}",
+        "Security": "ssl",
+        "Protocol": "TCPIP",
+        "connection_string": "Driver={/root/db2_cli_odbc_driver/odbc_cli/clidriver/lib/libdb2o.so};Database=BLUDB;Hostname=db2wh-block-cos-migration-4.us-south.dev.db2w.cloud.ibm.com;Port=50001;Uid=db2inst1;Pwd=;Security=ssl;Protocol=TCPIP;",
         "Hostname": "db2wh-block-cos-migration-4.us-south.dev.db2w.cloud.ibm.com",
         "Uid": "db2inst1",
         "Pwd": "",
-        "Database":"BLUDB",
-        "Port":"50001",
-        "tablespace_name":["","","",""],
-        "schema_name":["","","",""],
-        "tablespace_list":["","","",""],
-        "schema_list":["","","",""],
-        "table_name":["","","",""]
+        "Database": "BLUDB",
+        "Port": "50001",
+        "tablespace_name": [
+            "",
+            "",
+            "",
+            ""
+        ],
+        "schema_name": [
+            "",
+            "",
+            "",
+            ""
+        ],
+        "tablespace_list": [
+            "",
+            "",
+            "",
+            ""
+        ],
+        "schema_list": [
+            "",
+            "",
+            "",
+            ""
+        ],
+        "table_name": [
+            "",
+            "",
+            "",
+            ""
+        ]
     },
-"invalid_inputs":{
-    "Uid": "test",
-    "Database": 4 
-}
+    "invalid_inputs": {
+        "Uid": "test",
+        "Database": 4
+    }
 }
