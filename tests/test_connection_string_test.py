@@ -1,4 +1,4 @@
-from db2whmigratetocos.db2wh_db2_utilities import get_connection_string
+from db2whmigratetocos.db2wh_db2_utilities import get_connection_string, get_schema_in_instance
 import unittest
 import json
 
@@ -37,7 +37,8 @@ class TestGetConnectionString(unittest.TestCase):
     def test_invalid_inputs(self):
         raised = False
         try:
-            actual_output = get_connection_string(invdata['Uid'], vdata['Pwd'],vdata['Hostname'], vdata['Port'], invdata['Database'])
+            actual_output = get_connection_string(
+                invdata['Uid'], vdata['Pwd'], vdata['Hostname'], vdata['Port'], invdata['Database'])
             print("actual_output " + actual_output)
             self.assertTrue(raised, 'Exception not raised')
         except TypeError:
@@ -49,6 +50,7 @@ class TestGetConnectionString(unittest.TestCase):
         conn_list = ' '.join(conn_list).split()
         conn_kvpair = dict(s.split('=') for s in conn_list)
         return conn_kvpair
-    
+
+
 if __name__ == "__main__":
     unittest.main()
