@@ -16,7 +16,7 @@ from rich.table import Table
 from rich.console import Console
 from db2whmigratetocos.admin_move_table_func import adm_move_table_ops_db2woc
 from db2whmigratetocos.constants import SCHEMA_CSV_COLUMNS, TABLESPACE_CSV_COLUMNS
-from db2whmigratetocos.queries import ADM_MOVE_TABLE_FIND_PHASE, LIST_SCHEMAS, LIST_TABLES_IN_SCHEMA, LIST_TABLES_IN_TSPACE, LIST_TBSPACE_BY_TABNAME, LIST_TBSPACES, TAB_SIZE, GET_THE_ROW_COUNT
+from db2whmigratetocos.queries import ADM_MOVE_TABLE_FIND_PHASE, LIST_SCHEMAS, LIST_TABLES_IN_SCHEMA, LIST_TABLES_IN_TSPACE, LIST_TBSPACE_BY_TABNAME, LIST_TBSPACES, TAB_SIZE, GET_THE_ROW_COUNT, ADM_MOVE_TABLE_FIND_TARGET_TABLE
 
 
 console = Console()
@@ -482,7 +482,7 @@ def get_json_format_for_migration_run(schemaname: str, tablename: str, status: s
             "migration_job_id": migration_job_id,
             "source_tablespace": src_tbspace,
             "destination_tablespace": dest_tbspace,
-            "status": "REQUESTED TO" + status,
+            "status": "REQUESTED TO " + status,
             "table_name": tablename,
             "schema_name": schemaname,
             "phase_logs": [],
@@ -610,7 +610,7 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
         else:
             phase_status = details['status']
         if active is True:
-            if phase_status != 'COMPLETE':
+            if phase_status != 'COMPLETE' and "REQUESTED TO" not in phase_status:
                 rows = get_the_rows_moved_in_admin_move_table(
                     details['schema_name'], details['table_name'], user_id, password, hostname, port, database)
                 tb_table.add_row(str(details['batch_id']), str(details['migration_job_id']), str(details['table_name']), details['schema_name'],
@@ -785,6 +785,34 @@ def export_the_data_as_csv(tables, filename_prefix, db2_obj):
     print(f"Data saved to CSV file: {filename}")
 
 
+def get_the_original_tablename_from_admin_move_table(tablename, user_id, password, hostname, port, database):
+    """_summary_
+
+    Args:
+        schemaname (_type_): _description_
+        tablename (_type_): _description_
+        user_id (_type_): _description_
+        password (_type_): _description_
+        hostname (_type_): _description_
+        port (_type_): _description_
+        database (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    import pyodbc
+    connection_string = get_connection_string(
+        user_id, password, hostname, port, database)
+    cnxn = pyodbc.connect(connection_string+"LONGDATACOMPAT=1;")
+    conn = cnxn.cursor()
+    conn.execute(ADM_MOVE_TABLE_FIND_TARGET_TABLE.format(
+        TABLENAME=tablename))
+    rows = conn.fetchall()
+    cnxn.close()
+    for item in rows:
+        return item[0]
+
+
 def get_the_rows_moved_in_admin_move_table(schemaname, tablename, user_id, password, hostname, port, database):
     """_summary_
 
@@ -800,16 +828,16 @@ def get_the_rows_moved_in_admin_move_table(schemaname, tablename, user_id, passw
     Returns:
         _type_: _description_
     """
-    try:
-
-        cnxn = db2wh_pyodbc_connection(
-            user_id, password, hostname, port, database, False)
-        conn = cnxn.cursor()
-        conn.execute(GET_THE_ROW_COUNT.format(
-            TABLENAME=tablename, SCHEMANAME=schemaname))
-        rows = conn.fetchall()
-        cnxn.close()
-        for item in rows:
-            return item[0]
-    except Exception as e:
-        print(e)
+    cnxn = db2wh_pyodbc_connection(
+        user_id, password, hostname, port, database, False)
+    conn = cnxn.cursor()
+    table_name = get_the_original_tablename_from_admin_move_table(
+        tablename, user_id, password, hostname, port, database)
+    print(GET_THE_ROW_COUNT.format(
+        TABLENAME=table_name, SCHEMANAME=schemaname))
+    conn.execute(GET_THE_ROW_COUNT.format(
+        TABLENAME=table_name, SCHEMANAME=schemaname))
+    rows = conn.fetchall()
+    cnxn.close()
+    for item in rows:
+        return item[0]
