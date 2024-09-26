@@ -1,4 +1,4 @@
-from db2whmigratetocos.db2wh_db2_utilities import get_connection_string, get_schema_in_instance
+from db2whmigratetocos.db2wh_db2_utilities import get_connection_string
 import unittest
 import json
 

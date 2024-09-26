@@ -3,10 +3,10 @@
         "Driver": "{/root/db2_cli_odbc_driver/odbc_cli/clidriver/lib/libdb2o.so}",
         "Security": "ssl",
         "Protocol": "TCPIP",
-        "connection_string": "Driver={/root/db2_cli_odbc_driver/odbc_cli/clidriver/lib/libdb2o.so};Database=BLUDB;Hostname=db2wh-block-cos-migration-4.us-south.dev.db2w.cloud.ibm.com;Port=50001;Uid=db2inst1;Pwd=;Security=ssl;Protocol=TCPIP;",
+        "connection_string": "Driver={/root/db2_cli_odbc_driver/odbc_cli/clidriver/lib/libdb2o.so};Database=BLUDB;Hostname=db2wh-block-cos-migration-4.us-south.dev.db2w.cloud.ibm.com;Port=50001;Uid=db2inst1;Pwd=b3888067d52bbb2b;Security=ssl;Protocol=TCPIP;",
         "Hostname": "db2wh-block-cos-migration-4.us-south.dev.db2w.cloud.ibm.com",
         "Uid": "db2inst1",
-        "Pwd": "",
+        "Pwd": "b3888067d52bbb2b",
         "Database": "BLUDB",
         "Port": "50001",
         "tablespace_name": [
@@ -16,25 +16,7 @@
             ""
         ],
         "schema_name": [
-            "BDINSIGHTS",
-            "BHGV",
-            "BHU",
-            "DB2INST1",
-            "DER",
-            "EMP",
-            "FGRT",
-            "HDMSCH1",
-            "HDMSCH3",
-            "JUK",
-            "MBA",
-            "MCA",
-            "NCA",
-            "RFDE",
-            "RWQ",
-            "RWT",
-            "RWUY",
-            "TPCH",
-            "UTY"
+            "DB2INST1"
         ],
         "tablespace_list": [
             "",
