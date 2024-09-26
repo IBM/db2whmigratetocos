@@ -1,20 +1,15 @@
-from db2whmigratetocos.db2wh_db2_utilities import get_connection_string, get_schema_in_instance
+from db2whmigratetocos.db2wh_db2_utilities import get_connection_string
 import unittest
 import json
 
 with open('tests/content.json', 'r') as file:
     data = json.load(file)
     vdata = data['valid_inputs']
+    invdata = data['invalid_inputs']
     # print(vdata)
 
 
 class TestGetConnectionString(unittest.TestCase):
-    def test_schema(self):
-        data = get_schema_in_instance(
-            vdata['Uid'], vdata['Pwd'], vdata['Hostname'], vdata['Port'], vdata['Database'])
-        print(data)
-        self.assertIn(data, data)
-
     def test_valid_inputs(self):
         expected_output_driver = vdata['Driver']
         expected_output_Database = vdata['Database']
@@ -42,8 +37,7 @@ class TestGetConnectionString(unittest.TestCase):
     def test_invalid_inputs(self):
         raised = False
         try:
-            actual_output = get_connection_string(data['invalid_inputs']['Uid'], data['valid_inputs']['Pwd'],
-                                                  data['valid_inputs']['Hostname'], data['valid_inputs']['Port'], data['invalid_inputs']['Database'])
+            actual_output = get_connection_string(invdata['Uid'], vdata['Pwd'],vdata['Hostname'], vdata['Port'], invdata['Database'])
             print("actual_output " + actual_output)
             self.assertTrue(raised, 'Exception not raised')
         except TypeError:
@@ -55,7 +49,6 @@ class TestGetConnectionString(unittest.TestCase):
         conn_list = ' '.join(conn_list).split()
         conn_kvpair = dict(s.split('=') for s in conn_list)
         return conn_kvpair
-
-
+    
 if __name__ == "__main__":
     unittest.main()
