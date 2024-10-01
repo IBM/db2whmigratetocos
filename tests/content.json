@@ -9,26 +9,21 @@
         "Pwd": "b3888067d52bbb2b",
         "Database": "BLUDB",
         "Port": "50001",
-        "tablespace_name": [
+        "Tablespace": [
             "",
             "",
             "",
             ""
         ],
         "schema_name": [
-            "DB2INST1"
+            ""
         ],
         "tablespace_list": [
-            "",
-            "",
-            "",
-            ""
+            "USERSPACE1",
+            "OBJSTORESPACE1"
         ],
         "schema_list": [
-            "",
-            "",
-            "",
-            ""
+            "DB2INST1"
         ],
         "table_name": [
             "",
@@ -38,7 +33,7 @@
         ]
     },
     "invalid_inputs": {
-        "Uid": "test",
-        "Database": 4
+        "Uid": "db2inst1",
+        "Database": "4"
     }
 }
