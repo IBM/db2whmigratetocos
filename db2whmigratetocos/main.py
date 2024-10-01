@@ -4,6 +4,7 @@
     Licensed Materials - Property of IBM
 
 """
+import sys
 import traceback
 from datetime import datetime
 
@@ -13,7 +14,7 @@ from rich.console import Console
 from rich.table import Table
 import pandas as pd
 import typer
-from db2whmigratetocos.constants import STATUS_TABLE_HEADER
+from db2whmigratetocos.constants import STATUS_TABLE_HEADER, STATUS_TABLE_HEADER_ACTIVE_RUNS
 from db2whmigratetocos.db2wh_db2_utilities import check_home_path, check_if_logs_path_exist_else_create, create_a_log_directory_for_a_batch, db2wh_pyodbc_connection, export_the_data_as_csv, get_schema_in_instance, get_tables_cnt_under_tablespaces, get_tables_under_schema_in_db2woc, get_tables_under_tablespace_in_db2woc, get_tablespaces_in_block_and_cos, get_tabname_schemaname_under_tablespace_in_db2woc, get_tbpsace_name_for_table, list_migration_runs, move_the_tables, parse_the_json_files_for_status, print_export_tables_in_block_and_cos, print_table_row, validate_and_get_df_from_the_csv, validate_the_input_db2_objects
 from .db2whmigratetocos_install_prereq import db2whmigratetocos_init
 
@@ -160,7 +161,7 @@ def list(
                                         "No tables found in the tablespace")
                             if export_csv is True:
                                 export_the_data_as_csv(
-                                    tables_list_in_tablespaces, "db2whmigratetocos-tables-list-", "tablespace")
+                                    tables_list_in_tablespaces, "db2whmigratetocos-tables-list-")
                         else:
                             print_export_tables_in_block_and_cos(
                                 tablespace_list, export_csv)
@@ -211,12 +212,15 @@ def list(
                                         f"The total size of tables in schema is {total_estimate} KB")
                                     count = 0
                                     for table in tables:
+                                        table_tablespace = get_tbpsace_name_for_table(
+                                            user_id, password, hostname, port, database, table[0], schema)
+                                        tbspace_store = "cos" if "OBJSTORE" in table_tablespace else "block-storage"
                                         count = count+1
                                         if count <= 75:
                                             sc_table.add_row(
                                                 table[0], str(table[1]))
                                         tables_in_schema.append(
-                                            [schema, table[0], table[1]])
+                                            [table_tablespace, table[0], schema, table[1], str(tbspace_store)])
                                     console.print(sc_table)
                                 else:
                                     print()
@@ -225,7 +229,7 @@ def list(
                                     print()
                             if export_csv is True:
                                 export_the_data_as_csv(
-                                    tables_in_schema, "db2whmigratetocos-schemas-tables-list-", "schema")
+                                    tables_in_schema, "db2whmigratetocos-schemas-tables-list-")
                         else:
                             schema_table = Table(show_footer=False)
                             for row in schema_list:
@@ -255,10 +259,13 @@ def list(
 def move(
         password: Annotated[str, typer.Option(help="Password of the User ID")],
         hostname: Annotated[str, typer.Option(help="Hostname of the Db2 warehouse Instance")],
+
+        list: Annotated[str, typer.Option(
+            help="Source tablespace/schema in block storage - all/comma seperated list of tablespace/schema")],
+        csv_input: Annotated[str, typer.Option(
+            help="CSV file as input to the move command as .csv file without the path")] = None,
         scope: Annotated[str, typer.Option(
             help="Move tables by tablespace/schema")] = "tablespace",
-        list: Annotated[str, typer.Option(
-            help="Source tablespace/schema in block storage - all/comma seperated list of tablespace/schema")] = "USERSPACE1",
         dest_tbspace: Annotated[str, typer.Option(
             help="Destination tablespace in cos, where the data needs to be moved ")] = "OBJSTORESPACE1",
         user_id: Annotated[str, typer.Option(
@@ -283,6 +290,7 @@ def move(
     --dest_tablespace - OBJSTORESPACE1 - The destination tablespace in COS\n
     --skip_schema  - Skip a list of schema in the list - only used when the scope is schema\n
     --skip_tbspace - Skip a list of tablespaces in the list - only used when the scope is tablespace\n
+    --csv_input - Give the generated CSV as input for the move command
     \n
     Command:
     \n
@@ -302,51 +310,57 @@ def move(
             skip_tbspace_list = skip_tbspace.split(",")
             skip_schema_list = skip_schema.split(",")
             dest_tbspace_list = dest_tbspace.split(",")
-
-            input_list_csv_check = [
-                'csv' for i in src_db2_obj_list if 'csv' in i]
-            if input_list_csv_check:
-                input_list_csv = input_list_csv_check[0]
-            else:
-                input_list_csv = None
+            print(len(dest_tbspace_list))
+            print(dest_tbspace_list)
+            if csv_input != None:
+                if '.csv' in csv_input:
+                    print("Validating the CSV file path")
+                    if os.path.isfile(csv_input):
+                        print(csv_input + " file is present in the path")
+                    else:
+                        print("The given file do not exist in the provided path")
+                        sys.exit(0)
+                else:
+                    print("The given input is not a CSV file.. Aborting..")
+                    sys.exit(0)
             if scope == "tablespace":
                 valid_tbspace_list = get_tablespaces_in_block_and_cos(
                     user_id, password, hostname, port, database)
-                all_tablespaces = 'all' if 'all' in src_db2_obj_list else None
-                if input_list_csv == 'csv':
-                    log_directory_name = create_a_log_directory_for_a_batch()
-                    for item in src_db2_obj_list:
-                        if '.csv' in item:
-                            tables_in_df = validate_and_get_df_from_the_csv(
-                                item)
-                            if len(tables_in_df) > 0:
-                                for idx, row in enumerate(tables_in_df):
-                                    if row['tablespace'] in valid_tbspace_list:
-                                        if row['tablespace'] not in skip_tbspace_list:
-                                            if row['tablespace'] not in dest_tbspace_list:
-                                                tables_in_tablespace = get_tabname_schemaname_under_tablespace_in_db2woc(
-                                                    user_id, password, hostname, port, database, row['tablespace'])
-                                                table_exists = False
-                                                for item in tables_in_tablespace:
-                                                    if row['tablename'] == item[0]:
-                                                        table_exists = True
-                                                if table_exists:
-                                                    selected_dest_tbspace = idx % len(
-                                                        dest_tbspace_list)
-                                                    move_the_tables(row['schema'], row['Tablename'], row['Tablespace'], dest_tbspace_list[selected_dest_tbspace],
-                                                                    log_directory_name, user_id, password, hostname, port, database)
-                                                else:
-                                                    print(
-                                                        "Table not found in the tablespace")
-                                            else:
-                                                print(
-                                                    "The source and the destination tablespace are same")
+                if csv_input != None:
+                    tables_in_df = validate_and_get_df_from_the_csv(
+                        csv_input)
+                    if len(tables_in_df) > 1:
+                        log_directory_name = create_a_log_directory_for_a_batch()
+                        for idx, row in enumerate(tables_in_df):
+                            if row['tablespace'] in valid_tbspace_list:
+                                if row['tablespace'] not in skip_tbspace_list:
+                                    if row['tablespace'] not in dest_tbspace_list:
+                                        tables_in_tablespace = get_tabname_schemaname_under_tablespace_in_db2woc(
+                                            user_id, password, hostname, port, database, row['tablespace'])
+                                        table_exists = False
+                                        for item in tables_in_tablespace:
+                                            if row['tablename'] == item[0]:
+                                                table_exists = True
+                                        if table_exists:
+                                            selected_dest_tbspace = idx % len(
+                                                dest_tbspace_list)
+                                            move_the_tables(row['schema'], row['Tablename'], row['Tablespace'], dest_tbspace_list[selected_dest_tbspace],
+                                                            log_directory_name, user_id, password, hostname, port, database)
                                         else:
                                             print(
-                                                "skipping the tablespace as per the input")
+                                                "Table not found in the tablespace")
                                     else:
-                                        print("the tablespace name is invalid")
+                                        print(
+                                            "The source and the destination tablespace are same")
+                                else:
+                                    print(
+                                        "skipping the tablespace as per the input")
+                            else:
+                                print("the tablespace name is invalid")
+                    else:
+                        print("The CSV is empty")
                 else:
+                    all_tablespaces = 'all' if 'all' in src_db2_obj_list else None
                     if all_tablespaces == 'all':
                         tbspace_list = valid_tbspace_list
                     else:
@@ -379,43 +393,41 @@ def move(
                     user_id, password, hostname, port, database)
                 all_schemas = 'all' if 'all' in src_db2_obj_list else None
                 if valid_schema_list is not None:
-                    if input_list_csv == 'csv':
-                        log_directory_name = create_a_log_directory_for_a_batch()
-                        for item in src_db2_obj_list:
-                            if '.csv' in item:
-                                tables_in_df = validate_and_get_df_from_the_csv(
-                                    item)
-                                for idx, row in tables_in_df:
-                                    if row['schema'] in valid_schema_list:
-                                        if row['schema'] not in skip_schema_list:
-                                            source_tablespace = get_tbpsace_name_for_table(
-                                                user_id, password, hostname, port, database, row['Tablename'])
-                                            tables_in_schema = get_tables_under_schema_in_db2woc(
-                                                user_id, password, hostname, port, database, row['schema'])
-                                            table_exists = False
-                                            for item in tables_in_schema:
-                                                if row['tablename'] == item[0]:
-                                                    table_exists = True
-                                            if table_exists:
-                                                selected_dest_tbspace = idx % len(
-                                                    dest_tbspace_list)
-                                                if source_tablespace not in dest_tbspace_list:
-                                                    move_the_tables(row['schema'], row['tablename'], source_tablespace, dest_tbspace_list[selected_dest_tbspace],
-                                                                    log_directory_name, user_id, password, hostname, port, database)
-                                                else:
-                                                    print(
-                                                        "The source and the destination are same")
+                    if csv_input != None:
+                        tables_in_df = validate_and_get_df_from_the_csv(
+                            csv_input)
+                        if len(tables_in_df) > 1:
+                            log_directory_name = create_a_log_directory_for_a_batch()
+                            for idx, row in enumerate(tables_in_df):
+                                if row['schema'] in valid_schema_list:
+                                    if row['schema'] not in skip_schema_list:
+                                        source_tablespace = get_tbpsace_name_for_table(
+                                            user_id, password, hostname, port, database, row['tablename'], row['schema'])
+                                        tables_in_schema = get_tables_under_schema_in_db2woc(
+                                            user_id, password, hostname, port, database, row['schema'])
+                                        table_exists = False
+                                        for item in tables_in_schema:
+                                            if row['tablename'] == item[0]:
+                                                table_exists = True
+                                        if table_exists:
+                                            selected_dest_tbspace = idx % len(dest_tbspace_list)
+                                            if source_tablespace not in dest_tbspace_list:
+                                                move_the_tables(row['schema'], row['tablename'], source_tablespace, dest_tbspace_list[selected_dest_tbspace],
+                                                                log_directory_name, user_id, password, hostname, port, database)
                                             else:
                                                 print(
-                                                    "Skipping as table do not exist")
+                                                    "The source and the destination are same")
                                         else:
                                             print(
-                                                "skipping the schema as per the input")
+                                                "Skipping as table do not exist")
                                     else:
                                         print(
-                                            "The specified schema is not valid")
-                            else:
-                                print("kindly check if the file exists in path")
+                                            "skipping the schema as per the input")
+                                else:
+                                    print(
+                                        "The specified schema is not valid")
+                        else:
+                            print("The CSV is empty")
                     else:
                         # validation of schema and setting the list for movment
                         print(valid_schema_list)
@@ -429,17 +441,14 @@ def move(
                             if schema not in skip_schema_list:
                                 tables_cnt, tota_size, tables_in_schema = get_tables_under_schema_in_db2woc(
                                     user_id, password, hostname, port, database, schema)
-                                print(tables_cnt)
-                                print(tota_size)
                                 print(
                                     "Initiating the migration for each of the table, proceeding with next steps....")
                                 if len(tables_in_schema) != 0:
                                     log_directory_name = create_a_log_directory_for_a_batch()
-                                    for idx, item in tables_in_schema:
-                                        selected_dest_tbspace = idx % len(
-                                            dest_tbspace_list)
+                                    for idx, item in enumerate(tables_in_schema):
+                                        selected_dest_tbspace = idx % len(dest_tbspace_list)
                                         source_tablespace = get_tbpsace_name_for_table(
-                                            user_id, password, hostname, port, database, item[0])
+                                            user_id, password, hostname, port, database, item[0], schema)
                                         if source_tablespace not in dest_tbspace_list:
                                             move_the_tables(
                                                 schema, item[0], source_tablespace, dest_tbspace_list[selected_dest_tbspace], log_directory_name, user_id, password, hostname, port, database)
@@ -479,29 +488,30 @@ def status(
 
     '''
     try:
+        print("hgere")
         tables_in_block = []
         tables_in_cos = []
         total_tables_in_block = 0
         home = check_home_path()
         path = home.strip()+"/db2whmigratetocos-logs"
-        tablespaces_in_instance = get_tablespaces_in_block_and_cos(
-            user_id, password, hostname, port, database)
-        if len(tablespaces_in_instance) != 0:
-            for tablespace in tablespaces_in_instance:
-                table_in_tbspace = get_tables_cnt_under_tablespaces(
-                    user_id, password, hostname, port, database, tablespace)
-                if "OBJ" not in tablespace:
-                    total_tables_in_block = total_tables_in_block + table_in_tbspace
-                    tables_in_block.append([tablespace, table_in_tbspace])
-                else:
-                    tables_in_cos.append([tablespace, table_in_tbspace])
         if scope == "tables":
-            console.rule("[bold red]Tablespaces in Block")
-            print_tables_in_block = print_table_row(tables_in_block)
-            print(print_tables_in_block)
-            console.rule("[bold red]Tablespaces in COS")
-            print_in_tables_in_cos = print_table_row(tables_in_cos)
-            print(print_in_tables_in_cos)
+            tablespaces_in_instance = get_tablespaces_in_block_and_cos(
+                user_id, password, hostname, port, database)
+            if len(tablespaces_in_instance) != 0:
+                for tablespace in tablespaces_in_instance:
+                    table_in_tbspace = get_tables_cnt_under_tablespaces(
+                        user_id, password, hostname, port, database, tablespace)
+                    if "OBJ" not in tablespace:
+                        total_tables_in_block = total_tables_in_block + table_in_tbspace
+                        tables_in_block.append([tablespace, table_in_tbspace])
+                    else:
+                        tables_in_cos.append([tablespace, table_in_tbspace])
+                console.rule("[bold red]Tablespaces in Block")
+                print_tables_in_block = print_table_row(tables_in_block)
+                print(print_tables_in_block)
+                console.rule("[bold red]Tablespaces in COS")
+                print_in_tables_in_cos = print_table_row(tables_in_cos)
+                print(print_in_tables_in_cos)
         if scope == "migration-runs":
             console.rule("[bold red]Migration Runs")
             print(
@@ -520,7 +530,7 @@ def status(
                     if active_runs is True:
                         if len(active_migration_job_details) != 0:
                             tb_table_migration_runs = parse_the_json_files_for_status(
-                                active_migration_job_details, user_id, password, hostname, port, database, STATUS_TABLE_HEADER, active_runs)
+                                active_migration_job_details, user_id, password, hostname, port, database, STATUS_TABLE_HEADER_ACTIVE_RUNS, active_runs)
                             console.print(tb_table_migration_runs)
                         else:
                             print("No active migration runs yet in the instance")
