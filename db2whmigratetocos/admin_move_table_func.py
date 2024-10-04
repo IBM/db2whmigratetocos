@@ -11,6 +11,9 @@ import json
 import subprocess
 import logging
 
+from db2whmigratetocos.queries import GET_THE_ROW_COUNT, GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY
+
+
 logger = logging.getLogger(__name__)
 ADM_MOVE_TABLE_CMD_DB2WOC = "CALL SYSPROC.ADMIN_MOVE_TABLE('{SCHEMANAME}','{TABLENAME}','{DEST_TBSPACE}','{SOURCE_TBSPACE}','{DEST_TBSPACE}','','','','','USE_ADC,COPY_USE_OTA,COPY_USE_RID=0,NO_STATS,ALLOW_READ_ACCESS','{OPTION}')"
 ADM_MOVE_TABLE_PHASE_ERROR_STATE = "SQL2104N"
@@ -243,6 +246,7 @@ def adm_move_table_phase(user: str, password: str, hostname: str, port: str, dat
         init_start = ""
         cleanup_end = ""
         status = " "
+        copy_rows = ""
         cnxn = db2wh_pyodbc_connection(
             user, password, hostname, port, database)
         conn = cnxn.cursor()
@@ -251,11 +255,19 @@ def adm_move_table_phase(user: str, password: str, hostname: str, port: str, dat
         rows = conn.fetchall()
         logger.info(phase)
         logger.info(rows)
-        log_for_the_phase = parse_adm_move_table_by_phase(rows, phase)
+        log_for_the_phase = parse_adm_move_table_by_phase(
+            rows, phase, schemaname, tablename, user, password, hostname, port, database)
+        log_for_the_phase['SQL'] = ADM_MOVE_TABLE_CMD_DB2WOC.format(SCHEMANAME=schemaname, TABLENAME=tablename,
+                                                                    OPTION=phase, SOURCE_TBSPACE=src_tbspace, DEST_TBSPACE=dest_tbspace)
+        if log_for_the_phase['STATUS'] == 'COMPLETE':
+            copy_rows = get_the_rows_after_admin_move_table(
+                schemaname, tablename, user, password, hostname, port, database)
         with open(report_file_name, 'r+', encoding='utf-8') as file:
             file_data = json.load(file)
             file_data["phase_logs"].append(log_for_the_phase)
             file_data["status"] = log_for_the_phase["STATUS"]
+            if copy_rows != "":
+                file_data["COPY_TOTAL_ROWS"] = copy_rows
             file.seek(0)
             json.dump(file_data, file, indent=6)
         for item in rows:
@@ -298,7 +310,7 @@ def adm_move_table_phase(user: str, password: str, hostname: str, port: str, dat
         #             adm_move_table_ops_db2woc(user,password,hostname,port,database,schemaname,tablename,"INIT",src_tbspace,dest_tbspace)
 
 
-def parse_adm_move_table_by_phase(rows: any, phase: str):
+def parse_adm_move_table_by_phase(rows: any, phase: str, schemaname: str, tablename: str, user_id: str, password: str, hostname: str, port: str, database: str):
     """_summary_
 
     Args:
@@ -340,15 +352,12 @@ def parse_adm_move_table_by_phase(rows: any, phase: str):
                 copy_start = item[1]
             if item[0] == 'COPY_END':
                 copy_end = item[1]
-            if item[0] == 'COPY_TOTAL_ROWS':
-                copy_total_rows = item[1]
             if item[0] == 'COPY_OPTS':
                 copy_opts = item[1]
         copy_phase_details = {
             "STATUS": phase,
             "COPY_START": copy_start,
             "COPY_END": copy_end,
-            "COPY_TOTAL_ROWS": copy_total_rows,
             "COPY_OPTS": copy_opts
         }
         return copy_phase_details
@@ -427,7 +436,59 @@ def adm_move_table_ops_db2woc(user: str, password: str, hostname: str, port: str
                 time_taken = int((cleanup_end - init_time).total_seconds())
                 logger.info("Movement COMPLETE for {TABLENAME} in".format(
                     TABLENAME=tablename))
-                logger.info("Time Taken: %s Seconnds", str(time_taken))
+                logger.info("Time Taken: %s Seconds", str(time_taken))
                 logger.removeHandler(log_file_handler)
         if status is None:
             logger.info("Kindly check if the instance is up and running")
+
+
+def get_the_rows_moved_in_admin_move_table(schemaname, tablename, user_id, password, hostname, port, database):
+    """_summary_
+
+    Args:
+        schemaname (_type_): _description_
+        tablename (_type_): _description_
+        user_id (_type_): _description_
+        password (_type_): _description_
+        hostname (_type_): _description_
+        port (_type_): _description_
+        database (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    cnxn = db2wh_pyodbc_connection(
+        user_id, password, hostname, port, database)
+    conn = cnxn.cursor()
+    conn.execute(GET_THE_ROW_COUNT.format(
+        TABLENAME=tablename, SCHEMANAME=schemaname))
+    rows = conn.fetchall()
+    cnxn.close()
+    for item in rows:
+        return item[0]
+
+
+def get_the_rows_after_admin_move_table(schemaname, tablename, user_id, password, hostname, port, database):
+    """_summary_
+
+    Args:
+        schemaname (_type_): _description_
+        tablename (_type_): _description_
+        user_id (_type_): _description_
+        password (_type_): _description_
+        hostname (_type_): _description_
+        port (_type_): _description_
+        database (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    cnxn = db2wh_pyodbc_connection(
+        user_id, password, hostname, port, database)
+    conn = cnxn.cursor()
+    conn.execute(GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY.format(
+        TABLENAME=tablename, SCHEMANAME=schemaname))
+    rows = conn.fetchall()
+    cnxn.close()
+    for item in rows:
+        return item[0]

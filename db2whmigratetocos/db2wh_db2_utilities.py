@@ -104,7 +104,7 @@ def get_schema_in_instance(user: str, password: str, hostname: str, port: str, d
         cnxn.close()
         for item in rows:
             if "SYS" not in item[0] and "NULL" not in item[0] and "SQL" not in item[0] and "IBMPDQ" not in item[0] and "DEFAULT" not in item[0]:
-                user_schemas_list.append(item[0])
+                user_schemas_list.append(item[0].strip())
         return user_schemas_list
     except Exception as e:
         print(e)
@@ -275,7 +275,7 @@ def get_tabname_schemaname_under_tablespace_in_db2woc(user: str, password: str, 
         print(e)
 
 
-def get_tbpsace_name_for_table(user: str, password: str, hostname: str, port: str, database: str, tablename: str):
+def get_tbpsace_name_for_table(user: str, password: str, hostname: str, port: str, database: str, tablename: str, schemaname: str):
     """_summary_
 
     Args:
@@ -296,7 +296,8 @@ def get_tbpsace_name_for_table(user: str, password: str, hostname: str, port: st
         cnxn = db2wh_pyodbc_connection(
             user, password, hostname, port, database, False)
         conn = cnxn.cursor()
-        conn.execute(LIST_TBSPACE_BY_TABNAME.format(TABNAME=tablename))
+        conn.execute(LIST_TBSPACE_BY_TABNAME.format(
+            TABNAME=tablename, SCHEMANAME=schemaname))
         rows = conn.fetchall()
         cnxn.close()
         print(rows)
@@ -611,10 +612,19 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
             phase_status = details['status']
         if active is True:
             if phase_status != 'COMPLETE' and "REQUESTED TO" not in phase_status:
-                rows = get_the_rows_moved_in_admin_move_table(
+
+                print("here")
+                target_table_name = get_the_original_tablename_from_admin_move_table(
+                    details['table_name'], user_id, password, hostname, port, database)
+                target_rows = get_the_rows_moved_in_admin_move_table(
+                    details['schema_name'], target_table_name, user_id, password, hostname, port, database)
+                original_rows = get_the_rows_moved_in_admin_move_table(
                     details['schema_name'], details['table_name'], user_id, password, hostname, port, database)
+                # copy_percentage = (
+                #     (original_rows - target_rows) / original_rows) * 100
+                # copy_percentage = ""
                 tb_table.add_row(str(details['batch_id']), str(details['migration_job_id']), str(details['table_name']), details['schema_name'],
-                                 phase_status + " - " + str(rows), details['source_tablespace'], details['destination_tablespace'], time_taken)
+                                 phase_status, details['source_tablespace'], details['destination_tablespace'], "target - "+ str(target_rows) + str(original_rows))
         else:
             if phase_status == 'COMPLETE':
                 tb_table.add_row(str(details['batch_id']), str(details['migration_job_id']), str(
@@ -675,7 +685,7 @@ def validate_the_input_db2_objects(input_list, valid_list, obj_name):
     invalid_list = []
     validated_list = []
     for obj in input_list:
-        if obj not in valid_list:
+        if obj.strip() not in valid_list:
             invalid_list.append(obj)
     if len(invalid_list) > 0:
         print(f"skipping invalid {obj_name}")
@@ -775,9 +785,9 @@ def print_export_tables_in_block_and_cos(tablespace_list, export_csv):
             "The tablespaces in cos can be found in " + cos_filename)
 
 
-def export_the_data_as_csv(tables, filename_prefix, db2_obj):
+def export_the_data_as_csv(tables, filename_prefix):
     console.print("Exporting the schema data into CSV")
-    columns = SCHEMA_CSV_COLUMNS if db2_obj in "schema" else TABLESPACE_CSV_COLUMNS
+    columns = TABLESPACE_CSV_COLUMNS
     df = pd.DataFrame(tables, columns=columns)
     filename = filename_prefix + datetime.now().isoformat()+".csv"
     df.to_csv(filename, index=False)
@@ -831,12 +841,9 @@ def get_the_rows_moved_in_admin_move_table(schemaname, tablename, user_id, passw
     cnxn = db2wh_pyodbc_connection(
         user_id, password, hostname, port, database, False)
     conn = cnxn.cursor()
-    table_name = get_the_original_tablename_from_admin_move_table(
-        tablename, user_id, password, hostname, port, database)
-    print(GET_THE_ROW_COUNT.format(
-        TABLENAME=table_name, SCHEMANAME=schemaname))
     conn.execute(GET_THE_ROW_COUNT.format(
-        TABLENAME=table_name, SCHEMANAME=schemaname))
+        TABLENAME=tablename, SCHEMANAME=schemaname))
+
     rows = conn.fetchall()
     cnxn.close()
     for item in rows:
