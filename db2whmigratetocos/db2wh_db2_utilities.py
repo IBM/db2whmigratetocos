@@ -612,6 +612,7 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
             phase_status = details['status']
         if active is True:
             if phase_status != 'COMPLETE' and "REQUESTED TO" not in phase_status:
+
                 print("here")
                 target_table_name = get_the_original_tablename_from_admin_move_table(
                     details['table_name'], user_id, password, hostname, port, database)
@@ -842,6 +843,7 @@ def get_the_rows_moved_in_admin_move_table(schemaname, tablename, user_id, passw
     conn = cnxn.cursor()
     conn.execute(GET_THE_ROW_COUNT.format(
         TABLENAME=tablename, SCHEMANAME=schemaname))
+
     rows = conn.fetchall()
     cnxn.close()
     for item in rows:
