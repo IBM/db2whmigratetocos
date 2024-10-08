@@ -15,3 +15,4 @@ STATUS_TABLE_HEADER_ACTIVE_RUNS = ["BatchId", "JobId", "Table", "Schema",
 TABLESPACE_CSV_COLUMNS = ['tablespace',
                           'tablename', 'schema', 'size', 'storage']
 SCHEMA_CSV_COLUMNS = ["schema", "tablename", "size"]
+

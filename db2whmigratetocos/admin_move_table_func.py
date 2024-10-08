@@ -15,7 +15,7 @@ from db2whmigratetocos.queries import GET_THE_ROW_COUNT, GET_THE_ROW_COUNT_FROM_
 
 
 logger = logging.getLogger(__name__)
-ADM_MOVE_TABLE_CMD_DB2WOC = "CALL SYSPROC.ADMIN_MOVE_TABLE('{SCHEMANAME}','{TABLENAME}','{DEST_TBSPACE}','{SOURCE_TBSPACE}','{DEST_TBSPACE}','','','','','USE_ADC,COPY_USE_OTA,COPY_USE_RID=0,NO_STATS,ALLOW_READ_ACCESS','{OPTION}')"
+ADM_MOVE_TABLE_CMD_DB2WOC = "CALL SYSPROC.ADMIN_MOVE_TABLE('{SCHEMANAME}','{TABLENAME}','{DEST_TBSPACE}','{SOURCE_TBSPACE}','{DEST_TBSPACE}','','','','','COPY_USE_OTA,COPY_USE_RID=0,NO_STATS,ALLOW_READ_ACCESS','{OPTION}')"
 ADM_MOVE_TABLE_PHASE_ERROR_STATE = "SQL2104N"
 ADM_MOVE_TABLE_CLEANUP_ERROR_STATE = "SQL2105N"
 ADM_MOVE_TABLE_FIND_PHASE = "SELECT VALUE FROM SYSTOOLS.ADMIN_MOVE_TABLE WHERE KEY='STATUS' AND TABNAME='{TABLENAME}'"
@@ -80,8 +80,7 @@ def get_connection_string(user: str, password: str, hostname: str, port: str, da
     """
 
     home_path = check_home_path()
-    driver = "Driver={"+home_path.strip() + \
-        "/db2_cli_odbc_driver/odbc_cli/clidriver/lib/libdb2o.so};"
+    driver = "Driver={/opt/ibm/db2/V11.5/lib64/libdb2o.so};"
     database = "Database="+database+";"
     hostname = "Hostname="+hostname+";"
     port = "Port="+port+";"
@@ -174,21 +173,7 @@ def find_adm_status_to_retry(user: str, password: str, hostname: str, port: str,
         conn = cnxn.cursor()
         conn.execute(ADM_MOVE_TABLE_FIND_PHASE.format(TABLENAME=tablename))
         rows = conn.fetchall()
-        if len(rows) == 0:
-            actual_table_name = find_adm_status_for_struck_table(
-                user, password, hostname, port, database, tablename)
-            conn.execute(ADM_MOVE_TABLE_FIND_PHASE.format(
-                TABLENAME=actual_table_name))
-            rows = conn.fetchall()
-            for item in rows:
-                table_phase = item[0]
-                adm_move_table_phase(user, password, hostname, port, database, schemaname,
-                                     actual_table_name, "CANCEL", src_tbspace, dest_tbspace, report_file_name)
-                adm_move_table_phase(user, password, hostname, port, database, schemaname,
-                                     actual_table_name, "TERM", src_tbspace, dest_tbspace, report_file_name)
-                return "INIT"
-        else:
-            for item in rows:
+        for item in rows:
                 table_phase = item[0]
                 return table_phase
     except Exception as e:
@@ -243,10 +228,7 @@ def adm_move_table_phase(user: str, password: str, hostname: str, port: str, dat
         _type_: _description_
     """
     try:
-        init_start = ""
-        cleanup_end = ""
         status = " "
-        copy_rows = ""
         cnxn = db2wh_pyodbc_connection(
             user, password, hostname, port, database)
         conn = cnxn.cursor()
@@ -260,14 +242,11 @@ def adm_move_table_phase(user: str, password: str, hostname: str, port: str, dat
         log_for_the_phase['SQL'] = ADM_MOVE_TABLE_CMD_DB2WOC.format(SCHEMANAME=schemaname, TABLENAME=tablename,
                                                                     OPTION=phase, SOURCE_TBSPACE=src_tbspace, DEST_TBSPACE=dest_tbspace)
         if log_for_the_phase['STATUS'] == 'COMPLETE':
-            copy_rows = get_the_rows_after_admin_move_table(
-                schemaname, tablename, user, password, hostname, port, database)
+           log_for_the_phase['COPY_TOTAL_ROWS'] = get_the_rows_moved_in_admin_move_table(schemaname, tablename, user, password, hostname, port, database)
         with open(report_file_name, 'r+', encoding='utf-8') as file:
             file_data = json.load(file)
             file_data["phase_logs"].append(log_for_the_phase)
             file_data["status"] = log_for_the_phase["STATUS"]
-            if copy_rows != "":
-                file_data["COPY_TOTAL_ROWS"] = copy_rows
             file.seek(0)
             json.dump(file_data, file, indent=6)
         for item in rows:
@@ -277,17 +256,16 @@ def adm_move_table_phase(user: str, password: str, hostname: str, port: str, dat
                 status = item[1]
             if item[0] == 'CLEANUP_END':
                 cleanup_end = item[1]
-        return status, init_start, cleanup_end
+        return status
     except Exception as e:
         x, y = e.args
         if ADM_MOVE_TABLE_PHASE_ERROR_STATE in y:
             logger.info(x)
-            # status = find_adm_status_to_retry(user,password,hostname,port,database,tablename,schemaname,src_tbspace,dest_tbspace, report_file_name)
             logger.error("Error: %s", ADM_MOVE_TABLE_PHASE_ERROR_STATE)
             log_for_the_phase = {
-                "STATUS": "TERMINATED",
+                "STATUS": "INPROGRESS",
                 "ERROR_CODE": ADM_MOVE_TABLE_PHASE_ERROR_STATE,
-                "MESSAGE": "Retrying the migration of the table"
+                "MESSAGE": "Kindly check if the table is already in movement, cancel if needed"
             }
             with open(report_file_name, 'r+', encoding='utf-8') as file:
                 file_data = json.load(file)
@@ -295,11 +273,11 @@ def adm_move_table_phase(user: str, password: str, hostname: str, port: str, dat
                 file_data["status"] = log_for_the_phase["STATUS"]
                 file.seek(0)
                 json.dump(file_data, file, indent=6)
-            cancel_terminate_admin_move_table(
-                user, password, hostname, port, database, schemaname, tablename, "TERM", src_tbspace, dest_tbspace)
-            cancel_terminate_admin_move_table(
-                user, password, hostname, port, database, schemaname, tablename, "CANCEL", src_tbspace, dest_tbspace)
-            return "INIT", " ", " "
+            return "INPROGRESS"
+        else:
+            print(e)
+            return "ERROR"
+
         # if ADM_MOVE_TABLE_CLEANUP_ERROR_STATE in y:
         #          status = find_adm_status_for_a_table(user,password,hostname,port,database,tablename,schemaname,src_tbspace,dest_tbspace)
         #          print("Error: " + ADM_MOVE_TABLE_CLEANUP_ERROR_STATE)
@@ -325,7 +303,6 @@ def parse_adm_move_table_by_phase(rows: any, phase: str, schemaname: str, tablen
     init_opts = " "
     copy_start = " "
     copy_end = " "
-    copy_total_rows = " "
     copy_opts = " "
     swap_start = " "
     swap_end = " "
@@ -412,35 +389,49 @@ def adm_move_table_ops_db2woc(user: str, password: str, hostname: str, port: str
     while status != "COMPLETE":
         logger.info("INIT Phase for {TABLENAME}".format(TABLENAME=tablename))
         if status == "INIT":
-            status, init_start, cleanup_end = adm_move_table_phase(
-                user, password, hostname, port, database, schemaname, tablename, "INIT", src_tbspace, dest_tbspace, report_file_name)
+            status = adm_move_table_phase(
+                user, password, hostname, port, database, schemaname, tablename, "INIT", src_tbspace, dest_tbspace, report_file_name)     
         if status == "COPY":
             logger.info("COPY Phase for {TABLENAME}".format(
                 TABLENAME=tablename))
-            status, init_start, cleanup_end = adm_move_table_phase(
+            status = adm_move_table_phase(
                 user, password, hostname, port, database, schemaname, tablename, "COPY", src_tbspace, dest_tbspace, report_file_name)
+            status = find_adm_status_to_retry(user, password, hostname, port, database,tablename,schemaname,src_tbspace,dest_tbspace,report_file_name)
+
         if status == "REPLAY":
             logger.info("REPLAY Phase for {TABLENAME}".format(
                 TABLENAME=tablename))
-            status, init_start, cleanup_end = adm_move_table_phase(
+            status = adm_move_table_phase(
                 user, password, hostname, port, database, schemaname, tablename, "REPLAY", src_tbspace, dest_tbspace, report_file_name)
+
             logger.info("SWAP Phase for {TABLENAME}".format(
                 TABLENAME=tablename))
-            status, init_start, cleanup_end = adm_move_table_phase(
+            status = adm_move_table_phase(
                 user, password, hostname, port, database, schemaname, tablename, "SWAP", src_tbspace, dest_tbspace, report_file_name)
+            status = find_adm_status_to_retry(user, password, hostname, port, database,tablename,schemaname,src_tbspace,dest_tbspace,report_file_name)
+
             if status == "COMPLETE":
-                init_time = datetime.datetime.strptime(
-                    init_start, "%Y-%m-%d-%H.%M.%S.%f")
-                cleanup_end = datetime.datetime.strptime(
-                    cleanup_end, "%Y-%m-%d-%H.%M.%S.%f")
-                time_taken = int((cleanup_end - init_time).total_seconds())
                 logger.info("Movement COMPLETE for {TABLENAME} in".format(
                     TABLENAME=tablename))
-                logger.info("Time Taken: %s Seconds", str(time_taken))
                 logger.removeHandler(log_file_handler)
-        if status is None:
-            logger.info("Kindly check if the instance is up and running")
-
+        if status == "INPROGRESS":
+            print()
+            print("The migration for the table is already in progress")
+            print("Run the following command to cancel the exisitng run")
+            print('''db2whmigratetocos cancel --schema-name {SCHEMANAME} --table-name {TABLENAME} --src-tablespace {SRC_TABLESPACE} --dest-tablespace {DEST_TABLESPACE} --user-id {USER}  --password {PASSWORD}  --hostname {HOSTNAME}'''.
+                  format(SCHEMANAME = schemaname,TABLENAME=tablename,SRC_TABLESPACE=src_tbspace,DEST_TABLESPACE=dest_tbspace,USER=user,PASSWORD=password,HOSTNAME=hostname))
+            print("Initiating the move for the next table")
+            print()
+            logger.removeHandler(log_file_handler)
+            break
+        if status == None or status == "None":
+            logger.removeHandler(log_file_handler)
+            break
+        if status =="ERROR":
+            print("Please check the above error")
+            logger.removeHandler(log_file_handler)
+            break    
+   
 
 def get_the_rows_moved_in_admin_move_table(schemaname, tablename, user_id, password, hostname, port, database):
     """_summary_
