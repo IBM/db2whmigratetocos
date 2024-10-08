@@ -22,11 +22,10 @@ setuptools.setup(
     include_package_data=True,
     install_requires=[
         "typer",
-        "setuptools==70.0.0",
-        "wheel==0.43.0",
+        "setuptools",
+        "wheel",
         "pyodbc",
         "pandas",
-        "pytest"
     ],
     entry_points={
         "console_scripts": [

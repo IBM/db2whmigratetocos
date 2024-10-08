@@ -10,6 +10,7 @@ import subprocess
 import os
 import sys
 import uuid
+import math
 from datetime import datetime
 import pandas as pd
 from rich.table import Table
@@ -38,13 +39,15 @@ def check_home_path() -> str:
 
 
 def run_command(command: str) -> str:
-    """_summary_
+    """
+    runs the command as a subprocess in the shell
+    used for running the os commands
 
     Args:
         command (str): _description_
 
     Returns:
-        _type_: _description_
+        _type_: the string output
     """
     result = subprocess.check_output(command, shell=True, text=True)
     return result
@@ -53,7 +56,8 @@ def run_command(command: str) -> str:
 # db2 utility functions
 
 def get_tablespaces_in_block_and_cos(user: str, password: str, hostname: str, port: str, database: str):
-    """_summary_
+    """
+    Get the list tablespaces in the block storage and COS
 
     Args:
         user (str): _description_
@@ -63,7 +67,7 @@ def get_tablespaces_in_block_and_cos(user: str, password: str, hostname: str, po
         database (str): _description_
 
     Returns:
-        _type_: _description_
+        _type_: list of tablespaces
     """
     try:
         user_tablespaces_list = []
@@ -300,7 +304,6 @@ def get_tbpsace_name_for_table(user: str, password: str, hostname: str, port: st
             TABNAME=tablename, SCHEMANAME=schemaname))
         rows = conn.fetchall()
         cnxn.close()
-        print(rows)
         for item in rows:
             if item[0] in valid_tablespace_list:
                 tablespace_name = item[0]
@@ -325,8 +328,7 @@ def get_connection_string(user: str, password: str, hostname: str, port: str, da
         _type_: _description_
     """
     home_path = check_home_path()
-    driver = "Driver={"+home_path.strip() + \
-        "/db2_cli_odbc_driver/odbc_cli/clidriver/lib/libdb2o.so};"
+    driver = "Driver={/opt/ibm/db2/V11.5/lib64/libdb2o.so};"
     database = "Database="+database+";"
     hostname = "Hostname="+hostname+";"
     port = "Port="+port+";"
@@ -588,9 +590,12 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
         time_taken = "-"
         init_start = " "
         cleanup_end = " "
+        original_rows = 0
+        target_rows = 0
+        progress = 100
         if len(details['phase_logs']) > 0:
             for phase in details['phase_logs']:
-                if phase['STATUS'] != 'COMPLETE':
+                if phase['STATUS'] != 'COMPLETE' and phase['STATUS'] != 'INPROGRESS':
                     phase_status = find_adm_status_by_tablename(
                         user_id, password, hostname, port, database, str(details['table_name']))
                 else:
@@ -609,21 +614,20 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
                     time_taken = str(
                         int((cleanup_end - init_start).total_seconds()))
         else:
-            phase_status = details['status']
+            phase_status = details['status'] 
         if active is True:
-            if phase_status != 'COMPLETE' and "REQUESTED TO" not in phase_status:
-                print("here")
+            if phase_status != 'COMPLETE' and phase_status != "INPROGRESS" and "REQUESTED TO" not in phase_status:
+               
                 target_table_name = get_the_original_tablename_from_admin_move_table(
                     details['table_name'], user_id, password, hostname, port, database)
                 target_rows = get_the_rows_moved_in_admin_move_table(
                     details['schema_name'], target_table_name, user_id, password, hostname, port, database)
                 original_rows = get_the_rows_moved_in_admin_move_table(
                     details['schema_name'], details['table_name'], user_id, password, hostname, port, database)
-                # copy_percentage = (
-                #     (original_rows - target_rows) / original_rows) * 100
-                # copy_percentage = ""
+                if target_rows is not None and original_rows is not None:
+                 progress = math.ceil((100 - ((original_rows - target_rows)/original_rows) * 100))
                 tb_table.add_row(str(details['batch_id']), str(details['migration_job_id']), str(details['table_name']), details['schema_name'],
-                                 phase_status, details['source_tablespace'], details['destination_tablespace'], "target - "+ str(target_rows) + str(original_rows))
+                                 phase_status, details['source_tablespace'], details['destination_tablespace'], str(progress) +" %")
         else:
             if phase_status == 'COMPLETE':
                 tb_table.add_row(str(details['batch_id']), str(details['migration_job_id']), str(
