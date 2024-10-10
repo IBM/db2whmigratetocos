@@ -65,7 +65,7 @@ def define_logger_file(log_file_name):
     return log_file_handler
 
 
-def get_connection_string(user: str, password: str, hostname: str, port: str, database: str):
+def get_connection_string(user: str, password: str, hostname: str, port: str, database: str,dsn:str):
     """_summary_
 
     Args:
@@ -79,8 +79,12 @@ def get_connection_string(user: str, password: str, hostname: str, port: str, da
         _type_: _description_
     """
 
-    home_path = check_home_path()
-    driver = "Driver={/opt/ibm/db2/V11.5/lib64/libdb2o.so};"
+    if dsn != "":
+        driver = "Driver={"+dsn+"};"
+    else:
+        home_path = check_home_path()
+        driver = "Driver={"+home_path.strip() + \
+            "/db2_cli_odbc_driver/odbc_cli/clidriver/lib/libdb2o.so};"
     database = "Database="+database+";"
     hostname = "Hostname="+hostname+";"
     port = "Port="+port+";"
@@ -92,7 +96,7 @@ def get_connection_string(user: str, password: str, hostname: str, port: str, da
     return con_str
 
 
-def db2wh_pyodbc_connection(user: str, password: str, hostname: str, port: str, database: str) -> bool:
+def db2wh_pyodbc_connection(user: str, password: str, hostname: str, port: str, database: str,dsn:str) -> bool:
     """_summary_
 
     Args:
@@ -108,7 +112,7 @@ def db2wh_pyodbc_connection(user: str, password: str, hostname: str, port: str, 
     try:
         import pyodbc
         connection_string = get_connection_string(
-            user, password, hostname, port, database)
+            user, password, hostname, port, database,dsn)
         cnxn = pyodbc.connect(connection_string)
         return cnxn
     except Exception as e:
