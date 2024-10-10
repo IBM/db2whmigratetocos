@@ -260,7 +260,6 @@ def list(
 def move(
         password: Annotated[str, typer.Option(help="Password of the User ID")],
         hostname: Annotated[str, typer.Option(help="Hostname of the Db2 warehouse Instance")],
-
         list: Annotated[str, typer.Option(
             help="Source tablespace/schema in block storage - all/comma seperated list of tablespace/schema")] = None,
         csv_input: Annotated[str, typer.Option(

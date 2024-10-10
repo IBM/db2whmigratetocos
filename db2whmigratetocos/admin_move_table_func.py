@@ -418,7 +418,7 @@ def adm_move_table_ops_db2woc(user: str, password: str, hostname: str, port: str
             print()
             print("The migration for the table is already in progress")
             print("Run the following command to cancel the exisitng run")
-            print('''db2whmigratetocos cancel --schema-name {SCHEMANAME} --table-name {TABLENAME} --src-tablespace {SRC_TABLESPACE} --dest-tablespace {DEST_TABLESPACE} --user-id {USER}  --password {PASSWORD}  --hostname {HOSTNAME}'''.
+            print('''db2whmigratetocos cancel --schema-name {SCHEMANAME} --table-name {TABLENAME} --src-tablespace {SRC_TABLESPACE} --dest-tablespace {DEST_TABLESPACE} --user-id {USER}  --password '{PASSWORD}'  --hostname {HOSTNAME}'''.
                   format(SCHEMANAME = schemaname,TABLENAME=tablename,SRC_TABLESPACE=src_tbspace,DEST_TABLESPACE=dest_tbspace,USER=user,PASSWORD=password,HOSTNAME=hostname))
             print("Initiating the move for the next table")
             print()
