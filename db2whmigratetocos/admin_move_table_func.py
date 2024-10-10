@@ -262,7 +262,7 @@ def adm_move_table_phase(user: str, password: str, hostname: str, port: str, dat
             status = find_adm_status_to_retry(user, password, hostname, port, database,tablename,schemaname,src_tbspace,dest_tbspace,report_file_name)
             if status is not None:
               return status
-            else
+            else:
                return "NONE"
     except Exception as e:
         x, y = e.args
