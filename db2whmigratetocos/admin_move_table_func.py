@@ -235,28 +235,35 @@ def adm_move_table_phase(user: str, password: str, hostname: str, port: str, dat
         conn.execute(ADM_MOVE_TABLE_CMD_DB2WOC.format(SCHEMANAME=schemaname, TABLENAME=tablename,
                      OPTION=phase, SOURCE_TBSPACE=src_tbspace, DEST_TBSPACE=dest_tbspace))
         rows = conn.fetchall()
-        logger.info(phase)
-        logger.info(rows)
-        log_for_the_phase = parse_adm_move_table_by_phase(
-            rows, phase, schemaname, tablename, user, password, hostname, port, database)
-        log_for_the_phase['SQL'] = ADM_MOVE_TABLE_CMD_DB2WOC.format(SCHEMANAME=schemaname, TABLENAME=tablename,
-                                                                    OPTION=phase, SOURCE_TBSPACE=src_tbspace, DEST_TBSPACE=dest_tbspace)
-        if log_for_the_phase['STATUS'] == 'COMPLETE':
-           log_for_the_phase['COPY_TOTAL_ROWS'] = get_the_rows_moved_in_admin_move_table(schemaname, tablename, user, password, hostname, port, database)
-        with open(report_file_name, 'r+', encoding='utf-8') as file:
-            file_data = json.load(file)
-            file_data["phase_logs"].append(log_for_the_phase)
-            file_data["status"] = log_for_the_phase["STATUS"]
-            file.seek(0)
-            json.dump(file_data, file, indent=6)
-        for item in rows:
-            if item[0] == 'INIT_START':
-                init_start = item[1]
-            if item[0] == 'STATUS':
-                status = item[1]
-            if item[0] == 'CLEANUP_END':
-                cleanup_end = item[1]
-        return status
+        if rows is not None:
+            logger.info(phase)
+            logger.info(rows)
+            log_for_the_phase = parse_adm_move_table_by_phase(
+                rows, phase, schemaname, tablename, user, password, hostname, port, database)
+            log_for_the_phase['SQL'] = ADM_MOVE_TABLE_CMD_DB2WOC.format(SCHEMANAME=schemaname, TABLENAME=tablename,
+                                                                        OPTION=phase, SOURCE_TBSPACE=src_tbspace, DEST_TBSPACE=dest_tbspace)
+            if log_for_the_phase['STATUS'] == 'COMPLETE':
+                ['COPY_TOTAL_ROWS'] = get_the_rows_moved_in_admin_move_table(schemaname, tablename, user, password, hostname, port, database)
+            with open(report_file_name, 'r+', encoding='utf-8') as file:
+                file_data = json.load(file)
+                file_data["phase_logs"].append(log_for_the_phase)
+                file_data["status"] = log_for_the_phase["STATUS"]
+                file.seek(0)
+                json.dump(file_data, file, indent=6)
+            for item in rows:
+                if item[0] == 'INIT_START':
+                    init_start = item[1]
+                if item[0] == 'STATUS':
+                    status = item[1]
+                if item[0] == 'CLEANUP_END':
+                    cleanup_end = item[1]
+            return status
+        else:
+            status = find_adm_status_to_retry(user, password, hostname, port, database,tablename,schemaname,src_tbspace,dest_tbspace,report_file_name)
+            if status is not None:
+              return status
+            else
+               return "NONE"
     except Exception as e:
         x, y = e.args
         if ADM_MOVE_TABLE_PHASE_ERROR_STATE in y:
