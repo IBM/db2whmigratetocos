@@ -392,17 +392,15 @@ def generate_uuid():
     return str(generated_id).split("-", maxsplit=1)[0]
 
 
-def check_if_logs_path_exist_else_create():
+def check_if_logs_path_exist_else_create(log_directory_base_path:str):
     """_summary_
 
     Returns:
         _type_: _description_
     """
     try:
-        home = check_home_path()
-        path = home.strip()+"/db2whmigratetocos-logs"
+        path = log_directory_base_path
         is_exist = os.path.exists(path)
-        print(is_exist)
         if is_exist:
             return path
         else:
@@ -412,7 +410,7 @@ def check_if_logs_path_exist_else_create():
         print(e)
 
 
-def create_log_directory_for_migration_run(directory_name: str):
+def create_log_directory_for_migration_run(log_directory_base_path,directory_name: str):
     """_summary_
 
     Args:
@@ -422,13 +420,24 @@ def create_log_directory_for_migration_run(directory_name: str):
         _type_: _description_
     """
     try:
-        directory_path = check_if_logs_path_exist_else_create()
+        directory_path = check_if_logs_path_exist_else_create(log_directory_base_path)
         migration_sub_directory = str(
             directory_path)+"/"+directory_name.strip()
         os.makedirs(migration_sub_directory)
         return migration_sub_directory
     except Exception as e:
         print(e)
+
+
+def create_a_log_directory_for_a_batch(log_directory_base_path:str):
+    """_summary_
+    """
+    log_directory_name = ""
+    c = datetime.now()
+    current_time = c.strftime('%d%m%Y-%H%M%S')
+    directory_name = "batch-"+str(current_time)
+    log_directory_name = create_log_directory_for_migration_run(log_directory_base_path,directory_name)
+    return log_directory_name
 
 
 def create_file_for_the_table_migration(directory_name: str, file_name: str):
@@ -596,7 +605,7 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
         cleanup_end = " "
         original_rows = 0
         target_rows = 0
-        progress = 100
+        progress = 0
         if len(details['phase_logs']) > 0:
             for phase in details['phase_logs']:
                 if phase['STATUS'] != 'COMPLETE' and phase['STATUS'] != 'INPROGRESS':
@@ -620,15 +629,15 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
         else:
             phase_status = details['status'] 
         if active is True:
-            if phase_status != 'COMPLETE' and "REQUESTED TO" not in phase_status:
+            if phase_status != "COMPLETE" and "REQUESTED TO" not in phase_status:
                 target_table_name = get_the_original_tablename_from_admin_move_table(
                     details['table_name'], user_id, password, hostname, port, database,dsn)
                 target_rows = get_the_rows_moved_in_admin_move_table(
                     details['schema_name'], target_table_name, user_id, password, hostname, port, database,dsn)
                 original_rows = get_the_rows_moved_in_admin_move_table(
                     details['schema_name'], details['table_name'], user_id, password, hostname, port, database,dsn)
-                if target_rows is not None and original_rows is not None:
-                 progress = math.ceil((100 - ((original_rows - target_rows)/original_rows) * 100))
+                if target_rows is not None and original_rows is not None and int(original_rows) != 0:
+                  progress = math.ceil((100 - ((int(original_rows) - int(target_rows))/int(original_rows)) * 100))
                 tb_table.add_row(str(details['batch_id']), str(details['migration_job_id']), str(details['table_name']), details['schema_name'],
                                  phase_status, details['source_tablespace'], details['destination_tablespace'], str(progress) +" %")
         else:
@@ -739,15 +748,6 @@ def validate_and_get_df_from_the_csv(item):
         sys.exit(0)
 
 
-def create_a_log_directory_for_a_batch():
-    """_summary_
-    """
-    log_directory_name = ""
-    c = datetime.now()
-    current_time = c.strftime('%d%m%Y-%H%M%S')
-    directory_name = "batch-"+str(current_time)
-    log_directory_name = create_log_directory_for_migration_run(directory_name)
-    return log_directory_name
 
 
 def print_export_tables_in_block_and_cos(tablespace_list, export_csv):
