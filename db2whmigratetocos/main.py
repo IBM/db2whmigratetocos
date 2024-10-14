@@ -92,7 +92,7 @@ def list(
     try:
         print()
         valid_dsn = ""
-        ##TODO write fumction to validate the dsn
+        ##TODO write fumction to validate the dsn from odbc and  check for path variables as well
         console.print("Test Connect to the Db2 warehouse instance")
         if dsn!="":
          valid_dsn = dsn
@@ -280,9 +280,15 @@ def move(
         csv_input: Annotated[str, typer.Option(
             help="CSV file as input to the move command as .csv file without the path")] = None,
         dsn: Annotated[str, typer.Option(
-            help="Pass the DSN name if it is already configured")] = " ",
+            help="Pass the DSN name configured in ODBC Driver Config File (odbcinst.ini)")] = " ",
+        log_directory_path: Annotated[str, typer.Option(
+            help="Pass the log directory base path")] = " ",
         scope: Annotated[str, typer.Option(
             help="Move tables by tablespace/schema")] = "tablespace",
+        schema_name: Annotated[str, typer.Option(
+            help="Move tables by tablespace/schema")] = None,
+        table_name: Annotated[str, typer.Option(
+            help="Move tables by tablespace/schema")] = None,
         dest_tbspace: Annotated[str, typer.Option(
             help="Destination tablespace in cos, where the data needs to be moved ")] = "OBJSTORESPACE1",
         user_id: Annotated[str, typer.Option(
@@ -326,6 +332,15 @@ def move(
         else:
          conn_test = db2wh_pyodbc_connection(
             user_id, password, hostname, port, database, True,valid_dsn)
+        log_directory_base_path = ""
+        if log_directory_path != "":
+            log_directory_base_path = log_directory_path+"/db2whmigratetocos-logs/"
+            is_exist = os.path.exists(log_directory_base_path)
+            if is_exist is not True:
+                os.makedirs(log_directory_base_path, exist_ok=True)
+        else:
+            print("Please give the logs directory to be used to create logs\n")  
+            sys.exit(0)          
         print()
         console.print("Test Connect to the Db2 warehouse instance")
         if conn_test:
@@ -354,7 +369,7 @@ def move(
                     tables_in_df = validate_and_get_df_from_the_csv(
                         csv_input)
                     if len(tables_in_df) > 1:
-                        log_directory_name = create_a_log_directory_for_a_batch()
+                        log_directory_name = create_a_log_directory_for_a_batch(log_directory_base_path)
                         for idx, row in enumerate(tables_in_df):
                             if row['tablespace'] in valid_tbspace_list:
                                 if row['tablespace'] not in skip_tbspace_list:
@@ -391,7 +406,7 @@ def move(
                         else:
                             tbspace_list = validate_the_input_db2_objects(
                                 src_db2_obj_list, valid_tbspace_list, "tablespaces")
-                        log_directory_name = create_a_log_directory_for_a_batch()
+                        log_directory_name = create_a_log_directory_for_a_batch(log_directory_base_path)
                         for tbspace in tbspace_list:
                             tables_in_userspace = []
                             if tbspace not in skip_tbspace_list:
@@ -423,7 +438,7 @@ def move(
                         tables_in_df = validate_and_get_df_from_the_csv(
                             csv_input)
                         if len(tables_in_df) > 1:
-                            log_directory_name = create_a_log_directory_for_a_batch()
+                            log_directory_name = create_a_log_directory_for_a_batch(log_directory_base_path)
                             for idx, row in enumerate(tables_in_df):
                                 if row['schema'] in valid_schema_list:
                                     if row['schema'] not in skip_schema_list:
@@ -473,7 +488,7 @@ def move(
                                     print(
                                         "Initiating the migration for each of the table, proceeding with next steps....")
                                     if len(tables_in_schema) != 0:
-                                        log_directory_name = create_a_log_directory_for_a_batch()
+                                        log_directory_name =create_a_log_directory_for_a_batch(log_directory_base_path)
                                         for idx, item in enumerate(tables_in_schema):
                                             selected_dest_tbspace = idx % len(dest_tbspace_list)
                                             source_tablespace = get_tbpsace_name_for_table(
@@ -487,9 +502,20 @@ def move(
                                     print("Skipping the schema - " + schema)
                         else:
                             print("The provided list is empty. Try giving all/ List of tablespaces/schemas in the list")
-
                 else:
                     print("Kindly check the schema list that is provided as input")
+            if scope == "table":
+                if schema_name is not None:
+                    if table_name is not None:
+                        log_directory_name =create_a_log_directory_for_a_batch(log_directory_base_path)
+                        source_tablespace = get_tbpsace_name_for_table(user_id, password, hostname, port, database, item[0], schema,valid_dsn)
+                        selected_dest_tbspace = idx % len(dest_tbspace_list)
+                        if source_tablespace not in dest_tbspace_list:
+                             move_the_tables(schema_name,table_name, source_tablespace, dest_tbspace_list[selected_dest_tbspace], log_directory_name, user_id, password, hostname, port, database,valid_dsn)
+                    else:
+                        print("The table name is not provided") 
+                else:
+                        print("The schema name is not provided") 
         else:
             print("Kindly check if the Db2 warehouse Instance is up and runnning")
     except Exception as e:
@@ -504,6 +530,8 @@ def status(
         user_id: Annotated[str, typer.Option(help="User Id to connect to Db2 warehouse Instance")],
         password: Annotated[str, typer.Option(help="Password of the User ID")],
         hostname: Annotated[str, typer.Option(help="Hostname of the Db2 warehouse Instance")],
+        log_directory_path: Annotated[str, typer.Option(
+            help="Pass the DSN name if it is already configured")] = " ",
         dsn: Annotated[str, typer.Option(
             help="Pass the DSN name if it is already configured")] = " ",
         database: Annotated[str, typer.Option(
@@ -524,15 +552,17 @@ def status(
     tables_in_block = []
     tables_in_cos = []
     total_tables_in_block = 0
-    home = check_home_path()
-    path = home.strip()+"/db2whmigratetocos-logs"
+    if log_directory_path != " ":
+     path = log_directory_path
+    else:
+     print("Please provide the log path to know the status of the migration runs")
     if scope == "tables":
         tablespaces_in_instance = get_tablespaces_in_block_and_cos(
-            user_id, password, hostname, port, database)
+            user_id, password, hostname, port, database,dsn)
         if len(tablespaces_in_instance) != 0:
             for tablespace in tablespaces_in_instance:
                 table_in_tbspace = get_tables_cnt_under_tablespaces(
-                    user_id, password, hostname, port, database, tablespace)
+                    user_id, password, hostname, port, database, tablespace,dsn)
                 if "OBJ" not in tablespace:
                     total_tables_in_block = total_tables_in_block + table_in_tbspace
                     tables_in_block.append([tablespace, table_in_tbspace])
@@ -562,14 +592,14 @@ def status(
                 if active_runs is True:
                     if len(active_migration_job_details) != 0:
                         tb_table_migration_runs = parse_the_json_files_for_status(
-                            active_migration_job_details, user_id, password, hostname, port, database, STATUS_TABLE_HEADER_ACTIVE_RUNS, active_runs)
+                            active_migration_job_details, user_id, password, hostname, port, database, STATUS_TABLE_HEADER_ACTIVE_RUNS, active_runs,dsn)
                         console.print(tb_table_migration_runs)
                     else:
                         print("No active migration runs yet in the instance")
                 else:
                     if len(completed_migration_job_details) != 0:
                         tb_table_migration_runs = parse_the_json_files_for_status(
-                            completed_migration_job_details, user_id, password, hostname, port, database, STATUS_TABLE_HEADER, active_runs)
+                            completed_migration_job_details, user_id, password, hostname, port, database, STATUS_TABLE_HEADER, active_runs,dsn)
                         console.print(tb_table_migration_runs)
                     else:
                         print("No migration runs yet in the instance")
@@ -577,8 +607,8 @@ def status(
                 print("No migration runs yet in the instance")
         else:
             print("The logs folder is not present")
-            print("Creating the log folder")
-            check_if_logs_path_exist_else_create()
+            print("Creating the log folder in - " + path)
+            check_if_logs_path_exist_else_create(path)
    
 @ app.command()
 def cancel(
@@ -612,8 +642,8 @@ def cancel(
         if conn_test:
             ##TODO change dsn in the  admin_move_table.py
             print("Canceling the table migration")
-            cancel_terminate_admin_move_table(user_id, password, hostname, port, database, schema_name, table_name, "TERM", src_tablespace, dest_tablespace)
-            cancel_terminate_admin_move_table(user_id, password, hostname, port, database, schema_name, table_name, "CANCEL", src_tablespace, dest_tablespace)
+            cancel_terminate_admin_move_table(user_id, password, hostname, port, database, schema_name, table_name, "TERM", src_tablespace, dest_tablespace,dsn)
+            cancel_terminate_admin_move_table(user_id, password, hostname, port, database, schema_name, table_name, "CANCEL", src_tablespace, dest_tablespace,dsn)
     except Exception as e:
         print(e)
 
