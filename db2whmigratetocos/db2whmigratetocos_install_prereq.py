@@ -344,8 +344,9 @@ def db2whmigratetocos_init():
     console.print("Unpacking and setting up db2 driver", style="italic")
     unzip_the_driver()
     setup_the_db2_driver()
-    console.print("Creating the logs folder", style="italic")
-    create_the_logs_folder()
+    # not needed as the logs path is provided by the user
+    # console.print("Creating the logs folder", style="italic")
+    # create_the_logs_folder()
     print()
     console.print(
         "Final Environment check for all the needed dependencies", style="italic")
