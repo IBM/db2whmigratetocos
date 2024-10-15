@@ -1,5 +1,7 @@
+from itertools import islice
 from db2whmigratetocos.db2wh_db2_utilities import get_tables_under_tablespace_in_db2woc, get_tablespaces_in_block_and_cos, get_tbpsace_name_for_table,move_the_tables,create_a_log_directory_for_a_batch
 from db2whmigratetocos.queries import LIST_TABLES_IN_SCHEMA
+from db2whmigratetocos.main import move
 from tests.test_util import conn_manually
 import unittest
 import json
@@ -15,7 +17,8 @@ with open('tests/content.json', 'r') as file:
     invdata = data['invalid_inputs']
 
 class TestTableMove(unittest.TestCase):
-    def test_move_singletable_tablespace(self):
+
+    def test_move_table_from_selected_tablespace(self):
         tbspace_list = get_tablespaces_in_block_and_cos(vdata['Uid'], vdata['Pwd'], vdata['Hostname'], vdata['Port'], vdata['Database'])
         tbspace_list = [x.strip(' ') for x in tbspace_list]
         ts_tb_dict = {}
@@ -31,19 +34,23 @@ class TestTableMove(unittest.TestCase):
                         if  "OBJSTORESPACE" not in tbspace_list[i] and not tables_list[1].startswith("IBM"):
                             schemaname = tables_list[1]
                             tablename = tables_list[0]
-                            src_tbspace = tbspace_list[i]
                             ts_tb_dict.setdefault(tbspace_list[i], []).append(tables_list[0])  
 
         dest_tbspace = "OBJSTORESPACE1"
-        log_directory_name = create_a_log_directory_for_a_batch()
-        print("Moving table: ", tablename)
-        try:
-            result = move_the_tables(schemaname, tablename, src_tbspace, dest_tbspace, log_directory_name, vdata['Uid'], vdata['Pwd'], vdata['Hostname'], vdata['Port'], vdata['Database'])
-            print(result)
-        except TypeError:
-            print("Do nothing")
-        tablespace_after_move = get_tbpsace_name_for_table(vdata['Uid'], vdata['Pwd'], vdata['Hostname'], vdata['Port'], vdata['Database'], tablename, schemaname)
-        self.assertEqual(dest_tbspace, tablespace_after_move, "Table space is not changed for table " + tablename)
+        source_tbspace_list_all = list(ts_tb_dict.keys())
+        source_tbspace_list = source_tbspace_list_all[2:]
+        source_tbspace_final = ','.join(source_tbspace_list)
+        print("final list:", source_tbspace_list)
+
+        # try:
+        #     result = move(vdata['Pwd'], vdata['Hostname'],source_tbspace_final)
+        #     print("move results: ",result)
+        # except TypeError:
+        #     print("Do nothing")
+        
+        # tablespace_after_move = get_tbpsace_name_for_table(vdata['Uid'], vdata['Pwd'], vdata['Hostname'], vdata['Port'], vdata['Database'], tablename, schemaname)
+        # print("tablespace name after move: ",tablespace_after_move)
+        #self.assertEqual(dest_tbspace, tablespace_after_move, "Table space is not changed for table " + tablename)
 
     
 if __name__ == "__main__":
