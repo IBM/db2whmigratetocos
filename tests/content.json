@@ -9,6 +9,7 @@
         "Pwd": "b3888067d52bbb2b",
         "Database": "BLUDB",
         "Port": "50001",
+        "scope": "tablespace",
         "Tablespace": [
             "",
             "",

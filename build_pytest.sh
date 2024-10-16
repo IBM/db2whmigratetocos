@@ -15,4 +15,6 @@ scp -i /Users/ruhisehgal/.ssh/db2whmigratetocos-dev  content.json  root@9.30.214
 #ssh -i /Users/ruhisehgal/.ssh/db2whmigratetocos-dev root@9.30.214.235 "cd /root/db2migrate/db2whmigratetocos-0.0.1  && python -m unittest tests/test_tablespaces_in_block_and_cos.py"
 #ssh -i /Users/ruhisehgal/.ssh/db2whmigratetocos-dev root@9.30.214.235 "cd /root/db2migrate/db2whmigratetocos-0.0.1  && python -m unittest tests/test_tables_under_tablespace_in_db2woc.py"
 #ssh -i /Users/ruhisehgal/.ssh/db2whmigratetocos-dev root@9.30.214.235 "cd /root/db2migrate/db2whmigratetocos-0.0.1  && python -m unittest tests/test_tablespace_name_for_table.py"
-ssh -i /Users/ruhisehgal/.ssh/db2whmigratetocos-dev root@9.30.214.235 "cd /root/db2migrate/db2whmigratetocos-0.0.1  && python -m unittest tests/test_tables_under_schema_in_db2woc.py"
+#ssh -i /Users/ruhisehgal/.ssh/db2whmigratetocos-dev root@9.30.214.235 "cd /root/db2migrate/db2whmigratetocos-0.0.1  && python -m unittest tests/test_tables_under_schema_in_db2woc.py"
+#ssh -i /Users/ruhisehgal/.ssh/db2whmigratetocos-dev root@9.30.214.235 "cd /root/db2migrate/db2whmigratetocos-0.0.1  && python -m unittest tests/test_move_the_table.py"
+ssh -i /Users/ruhisehgal/.ssh/db2whmigratetocos-dev root@9.30.214.235 "cd /root/db2migrate/db2whmigratetocos-0.0.1  && python -m unittest tests/test_move.py"
