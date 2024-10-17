@@ -141,7 +141,7 @@ def get_tables_under_schema_in_db2woc(user: str, password: str, hostname: str, p
         for item in rows:
             est_size = " "
             est_size = tab_size_by_table_name(
-                user, password, hostname, port, database, schemaname, item[0])
+                user, password, hostname, port, database, schemaname, item[0],dsn)
             total_estimate_size += int(est_size)
             tables_in_schema.append([item[0], est_size])
         return table_cnt, total_estimate_size, tables_in_schema
@@ -207,7 +207,7 @@ def get_tables_under_tablespace_in_db2woc(user: str, password: str, hostname: st
                     if str(item[0]).endswith('t') is False:
                         table_cnt = table_cnt + 1
                         est_size = tab_size_by_table_name(
-                            user, password, hostname, port, database, item[1], item[0])
+                            user, password, hostname, port, database, item[1], item[0],dsn)
                         total_estimate_size += int(est_size)
                         table_names_in_tablespace.append(
                             [item[0], item[1], est_size])
@@ -327,12 +327,13 @@ def get_connection_string(user: str, password: str, hostname: str, port: str, da
     Returns:
         _type_: _description_
     """
-    if dsn != "":
+    if dsn != " ":
         driver = "Driver={"+dsn+"};"
     else:
         home_path = check_home_path()
         driver = "Driver={"+home_path.strip() + \
             "/db2_cli_odbc_driver/odbc_cli/clidriver/lib/libdb2o.so};"
+        print(driver)
     database = "Database="+database+";"
     hostname = "Hostname="+hostname+";"
     port = "Port="+port+";"
@@ -649,7 +650,7 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
 
 # move utilities
 
-def move_the_tables(schema, tablename, source_tablespace, dest_tbspace, log_directory_name, user_id, password, hostname, port, database,dsn):
+def move_the_tables(schema, tablename, source_tablespace, dest_tbspace, log_directory_name, user_id, password, hostname, port, database,dsn,index_tbspace):
     """_summary_
 
     Args:
@@ -683,7 +684,7 @@ def move_the_tables(schema, tablename, source_tablespace, dest_tbspace, log_dire
               "/"+report_file_name_for_the_table)
         print("Logs in " + log_directory_name+"/"+std_output_name_for_the_file)
         adm_move_table_ops_db2woc(user_id, password, hostname, port, database, schema, tablename, "INIT", source_tablespace,
-                                  dest_tbspace, log_directory_name+"/"+report_file_name_for_the_table, log_directory_name+"/"+std_output_name_for_the_file,dsn)
+                                  dest_tbspace, log_directory_name+"/"+report_file_name_for_the_table, log_directory_name+"/"+std_output_name_for_the_file,dsn,index_tbspace)
 
 
 def validate_the_input_db2_objects(input_list, valid_list, obj_name):
@@ -869,12 +870,16 @@ def get_list_of_objectspaces(user_id, password, hostname, port, database,dsn:str
         conn = cnxn.cursor()
         conn.execute(GET_STORAGE_PATH_DEFINED_IN_INSTANCE)
         rows = conn.fetchall()
-        cnxn.close()
+        print(rows)
         for item in rows:
-            conn.execute(GET_OBJECTSPACE_USING_SGNAME.format(SGNAME=item[0]))
-            rows = conn.fetchall()
-            for item in rows:
-                object_space_list.append(item[0])
-            return object_space_list     
+            print(item[0],item[1])
+            if  "DB2REMOTE" in item[1]:
+                conn.execute(GET_OBJECTSPACE_USING_SGNAME.format(SGNAME=item[0]))
+                rows = conn.fetchall()
+                print(rows)
+                for item in rows:
+                    object_space_list.append(item[0])
+                cnxn.close()
+                return object_space_list     
     except Exception as e:
         print(e)
