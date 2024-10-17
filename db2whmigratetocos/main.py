@@ -281,9 +281,9 @@ def move(
         csv_input: Annotated[str, typer.Option(
             help="CSV file as input to the move command as .csv file without the path")] = None,
         dsn: Annotated[str, typer.Option(
-            help="Pass the DSN name configured in ODBC Driver Config File (odbcinst.ini)")] = " ",
+            help="Pass the DSN name configured in ODBC Driver Config File (odbcinst.ini)")] = None,
         log_directory_path: Annotated[str, typer.Option(
-            help="Pass the log directory base path")] = " ",
+            help="Pass the log directory base path")] = None,
         index_tbspace: Annotated[str, typer.Option(
             help="Index tablespace, where the index can be placed")] = "tablespace", 
         scope: Annotated[str, typer.Option(
@@ -328,15 +328,15 @@ def move(
     """
     try:
         valid_dsn = ""
-        if dsn!="":
+        if dsn is not None:
          valid_dsn = dsn
          conn_test = db2wh_pyodbc_connection(
             user_id, password, hostname, port, database, True,dsn)
         else:
          conn_test = db2wh_pyodbc_connection(
             user_id, password, hostname, port, database, True,valid_dsn)
-        log_directory_base_path = ""
-        if log_directory_path != "":
+        log_directory_base_path = " "
+        if log_directory_path is not None:
             log_directory_base_path = log_directory_path+"/db2whmigratetocos-logs/"
             is_exist = os.path.exists(log_directory_base_path)
             if is_exist is not True:
@@ -394,7 +394,7 @@ def move(
                                             selected_dest_tbspace = idx % len(
                                                 dest_tbspace_list)
                                             move_the_tables(row['schema'], row['tablename'], row['tablespace'], dest_tbspace_list[selected_dest_tbspace],
-                                                            log_directory_name, user_id, password, hostname, port, database,valid_dsn)
+                                                            log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace)
                                         else:
                                             print(
                                                 "Table not found in the tablespace")
@@ -431,7 +431,7 @@ def move(
                                             selected_dest_tbspace = idx % len(
                                                 dest_tbspace_list)
                                             move_the_tables(items[1], items[0], tbspace, dest_tbspace_list[selected_dest_tbspace],
-                                                            log_directory_name, user_id, password, hostname, port, database,valid_dsn)
+                                                            log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace)
                                     if len(tables_in_userspace) == 0:
                                         print("No tables found in the tablespace")
                                 else:
@@ -464,7 +464,7 @@ def move(
                                             selected_dest_tbspace = idx % len(dest_tbspace_list)
                                             if source_tablespace not in dest_tbspace_list:
                                                 move_the_tables(row['schema'], row['tablename'], source_tablespace, dest_tbspace_list[selected_dest_tbspace],
-                                                                log_directory_name, user_id, password, hostname, port, database,valid_dsn)
+                                                                log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace)
                                                 print("here")
                                             else:
                                                 print(
@@ -505,7 +505,7 @@ def move(
                                                 user_id, password, hostname, port, database, item[0], schema,valid_dsn)
                                             if source_tablespace not in dest_tbspace_list:
                                                 move_the_tables(
-                                                    schema, item[0], source_tablespace, dest_tbspace_list[selected_dest_tbspace], log_directory_name, user_id, password, hostname, port, database,valid_dsn)
+                                                    schema, item[0], source_tablespace, dest_tbspace_list[selected_dest_tbspace], log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace)
                                     if len(tables_in_schema) == 0:
                                         print("No tables found in the schema")
                                 else:
@@ -536,16 +536,16 @@ def move(
 @ app.command()
 def status(
         scope: Annotated[str, typer.Option(help="tables - lists the no of tables in block & COS;migration-runs - migration runs that ran till now")],
-        active_runs: Annotated[bool, typer.Option(help="active - lists the active migration runs;completed - lists the completed migration runs")],
         user_id: Annotated[str, typer.Option(help="User Id to connect to Db2 warehouse Instance")],
         password: Annotated[str, typer.Option(help="Password of the User ID")],
         hostname: Annotated[str, typer.Option(help="Hostname of the Db2 warehouse Instance")],
         log_directory_path: Annotated[str, typer.Option(
-            help="Pass the DSN name if it is already configured")] = " ",
+            help="Pass the DSN name if it is already configured")] = None,
         dsn: Annotated[str, typer.Option(
             help="Pass the DSN name if it is already configured")] = " ",
         database: Annotated[str, typer.Option(
             help="Database to be connected")] = "BLUDB",
+        active_runs: Annotated[bool, typer.Option(help="active - lists the active migration runs;completed - lists the completed migration runs")] = False,
         port: Annotated[str, typer.Option(help="Port to be used for Db2 warehouse Instance")] = "50001"):
     '''
     Status and the metrics of the migration jobs
@@ -562,10 +562,11 @@ def status(
     tables_in_block = []
     tables_in_cos = []
     total_tables_in_block = 0
-    if log_directory_path != " ":
-     path = log_directory_path
+    if log_directory_path != None:
+     path = log_directory_path+"/db2whmigratetocos-logs/"
     else:
      print("Please provide the log path to know the status of the migration runs")
+     sys.exit(0)
     if scope == "tables":
         tablespaces_in_instance = get_tablespaces_in_block_and_cos(
             user_id, password, hostname, port, database,dsn)

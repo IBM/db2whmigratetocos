@@ -333,7 +333,6 @@ def get_connection_string(user: str, password: str, hostname: str, port: str, da
         home_path = check_home_path()
         driver = "Driver={"+home_path.strip() + \
             "/db2_cli_odbc_driver/odbc_cli/clidriver/lib/libdb2o.so};"
-        print(driver)
     database = "Database="+database+";"
     hostname = "Hostname="+hostname+";"
     port = "Port="+port+";"
@@ -637,7 +636,11 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
                     details['schema_name'], target_table_name, user_id, password, hostname, port, database,dsn)
                 original_rows = get_the_rows_moved_in_admin_move_table(
                     details['schema_name'], details['table_name'], user_id, password, hostname, port, database,dsn)
+                print(target_rows)
+                print(original_rows)
                 if target_rows is not None and original_rows is not None and int(original_rows) != 0:
+                  print(target_rows)
+                  print(original_rows)
                   progress = math.ceil((100 - ((int(original_rows) - int(target_rows))/int(original_rows)) * 100))
                 tb_table.add_row(str(details['batch_id']), str(details['migration_job_id']), str(details['table_name']), details['schema_name'],
                                  phase_status, details['source_tablespace'], details['destination_tablespace'], str(progress) +" %")
