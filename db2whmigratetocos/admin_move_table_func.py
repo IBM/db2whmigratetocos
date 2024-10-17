@@ -15,7 +15,7 @@ from db2whmigratetocos.queries import GET_THE_ROW_COUNT, GET_THE_ROW_COUNT_FROM_
 
 
 logger = logging.getLogger(__name__)
-ADM_MOVE_TABLE_CMD_DB2WOC = "CALL SYSPROC.ADMIN_MOVE_TABLE('{SCHEMANAME}','{TABLENAME}','{DEST_TBSPACE}','{SOURCE_TBSPACE}','{DEST_TBSPACE}','','','','','COPY_USE_OTA,COPY_USE_RID=0,NO_STATS,ALLOW_READ_ACCESS','{OPTION}')"
+ADM_MOVE_TABLE_CMD_DB2WOC = "CALL SYSPROC.ADMIN_MOVE_TABLE('{SCHEMANAME}','{TABLENAME}','{DEST_TBSPACE}','{INDEX_TBSPACE}','{DEST_TBSPACE}','','','','','COPY_USE_OTA,COPY_USE_RID=0,NO_STATS,ALLOW_READ_ACCESS','{OPTION}')"
 ADM_MOVE_TABLE_PHASE_ERROR_STATE = "SQL2104N"
 ADM_MOVE_TABLE_CLEANUP_ERROR_STATE = "SQL2105N"
 ADM_MOVE_TABLE_FIND_PHASE = "SELECT VALUE FROM SYSTOOLS.ADMIN_MOVE_TABLE WHERE KEY='STATUS' AND TABNAME='{TABLENAME}'"
@@ -212,7 +212,7 @@ def cancel_terminate_admin_move_table(user: str, password: str, hostname: str, p
         print(e)
 
 
-def adm_move_table_phase(user: str, password: str, hostname: str, port: str, database: str, schemaname: str, tablename: str, phase: str, src_tbspace: str, dest_tbspace: str, report_file_name,dsn:str):
+def adm_move_table_phase(user: str, password: str, hostname: str, port: str, database: str, schemaname: str, tablename: str, phase: str, src_tbspace: str, dest_tbspace: str, report_file_name,dsn:str,index_tbspace:str):
     """_summary_
 
     Args:
@@ -237,16 +237,16 @@ def adm_move_table_phase(user: str, password: str, hostname: str, port: str, dat
             user, password, hostname, port, database,dsn)
         conn = cnxn.cursor()
         conn.execute(ADM_MOVE_TABLE_CMD_DB2WOC.format(SCHEMANAME=schemaname, TABLENAME=tablename,
-                     OPTION=phase, SOURCE_TBSPACE=src_tbspace, DEST_TBSPACE=dest_tbspace))
+                     OPTION=phase, SOURCE_TBSPACE=src_tbspace, DEST_TBSPACE=dest_tbspace,INDEX_TBSPACE=index_tbspace))
         rows = conn.fetchall()
         if rows is not None:
             logger.info(phase)
             logger.info(rows)
             log_for_the_phase = parse_adm_move_table_by_phase(rows, phase)
             log_for_the_phase['SQL'] = ADM_MOVE_TABLE_CMD_DB2WOC.format(SCHEMANAME=schemaname, TABLENAME=tablename,
-                                                                        OPTION=phase, SOURCE_TBSPACE=src_tbspace, DEST_TBSPACE=dest_tbspace)
+                                                                        OPTION=phase, SOURCE_TBSPACE=src_tbspace, DEST_TBSPACE=dest_tbspace,INDEX_TBSPACE=index_tbspace)
             if log_for_the_phase['STATUS'] == 'COMPLETE':
-                ['COPY_TOTAL_ROWS'] = get_the_rows_moved_in_admin_move_table(schemaname, tablename, user, password, hostname, port, database,dsn)
+                log_for_the_phase['COPY_TOTAL_ROWS'] = get_the_rows_moved_in_admin_move_table(schemaname, tablename, user, password, hostname, port, database,dsn)
             with open(report_file_name, 'r+', encoding='utf-8') as file:
                 file_data = json.load(file)
                 file_data["phase_logs"].append(log_for_the_phase)
@@ -376,7 +376,7 @@ def parse_adm_move_table_by_phase(rows: any, phase: str):
         return swap_phase_details
 
 
-def adm_move_table_ops_db2woc(user: str, password: str, hostname: str, port: str, database: str, schemaname: str, tablename: str, status: str, src_tbspace: str, dest_tbspace: str, report_file_name: str, log_file_name: str,dsn:str):
+def adm_move_table_ops_db2woc(user: str, password: str, hostname: str, port: str, database: str, schemaname: str, tablename: str, status: str, src_tbspace: str, dest_tbspace: str, report_file_name: str, log_file_name: str,dsn:str,index_tbspace:str):
     """_summary_
 
     Args:
@@ -400,24 +400,24 @@ def adm_move_table_ops_db2woc(user: str, password: str, hostname: str, port: str
         logger.info("INIT Phase for {TABLENAME}".format(TABLENAME=tablename))
         if status == "INIT":
             status = adm_move_table_phase(
-                user, password, hostname, port, database, schemaname, tablename, "INIT", src_tbspace, dest_tbspace, report_file_name,dsn)     
+                user, password, hostname, port, database, schemaname, tablename, "INIT", src_tbspace, dest_tbspace, report_file_name,dsn,index_tbspace)     
         if status == "COPY":
             logger.info("COPY Phase for {TABLENAME}".format(
                 TABLENAME=tablename))
             status = adm_move_table_phase(
-                user, password, hostname, port, database, schemaname, tablename, "COPY", src_tbspace, dest_tbspace, report_file_name,dsn)
+                user, password, hostname, port, database, schemaname, tablename, "COPY", src_tbspace, dest_tbspace, report_file_name,dsn,index_tbspace)
             status = find_adm_status_to_retry(user, password, hostname, port, database,tablename,schemaname,src_tbspace,dest_tbspace,report_file_name,dsn)
 
         if status == "REPLAY":
             logger.info("REPLAY Phase for {TABLENAME}".format(
                 TABLENAME=tablename))
             status = adm_move_table_phase(
-                user, password, hostname, port, database, schemaname, tablename, "REPLAY", src_tbspace, dest_tbspace, report_file_name,dsn)
+                user, password, hostname, port, database, schemaname, tablename, "REPLAY", src_tbspace, dest_tbspace, report_file_name,dsn,index_tbspace)
 
             logger.info("SWAP Phase for {TABLENAME}".format(
                 TABLENAME=tablename))
             status = adm_move_table_phase(
-                user, password, hostname, port, database, schemaname, tablename, "SWAP", src_tbspace, dest_tbspace, report_file_name,dsn)
+                user, password, hostname, port, database, schemaname, tablename, "SWAP", src_tbspace, dest_tbspace, report_file_name,dsn,index_tbspace)
             status = find_adm_status_to_retry(user, password, hostname, port, database,tablename,schemaname,src_tbspace,dest_tbspace,report_file_name,dsn)
             if status == "COMPLETE":
                 logger.info("Movement COMPLETE for {TABLENAME} in".format(
