@@ -91,10 +91,10 @@ def list(
     """
     try:
         print()
-        valid_dsn = ""
+        valid_dsn = " "
         ##TODO write fumction to validate the dsn from odbc and  check for path variables as well
         console.print("Test Connect to the Db2 warehouse instance")
-        if dsn!="":
+        if dsn !=" ":
          valid_dsn = dsn
          conn_status = db2wh_pyodbc_connection(
             user_id, password, hostname, port, database, True,valid_dsn)
@@ -136,6 +136,7 @@ def list(
                             print()
                             tables_list_in_tablespaces = []
                             object_space_list = get_list_of_objectspaces(user_id,password,hostname,port,database,valid_dsn)
+                            print(object_space_list)
                             for tbspace in tablespace_list:
                                 tbspace_store = " "
                                 if len(object_space_list) != 0:
@@ -283,6 +284,8 @@ def move(
             help="Pass the DSN name configured in ODBC Driver Config File (odbcinst.ini)")] = " ",
         log_directory_path: Annotated[str, typer.Option(
             help="Pass the log directory base path")] = " ",
+        index_tbspace: Annotated[str, typer.Option(
+            help="Index tablespace, where the index can be placed")] = "tablespace", 
         scope: Annotated[str, typer.Option(
             help="Move tables by tablespace/schema")] = "tablespace",
         schema_name: Annotated[str, typer.Option(
@@ -339,15 +342,22 @@ def move(
             if is_exist is not True:
                 os.makedirs(log_directory_base_path, exist_ok=True)
         else:
-            print("Please give the logs directory to be used to create logs\n")  
+            print("Please provide the logs directory to be used to create logs\n")  
             sys.exit(0)          
         print()
         console.print("Test Connect to the Db2 warehouse instance")
+        object_space_list = get_list_of_objectspaces(user_id,password,hostname,port,database,valid_dsn)
+        if index_tbspace in object_space_list:
+            print('The index tablespace cannot be a remote tablespace')
+            sys.exit(0)
         if conn_test:
-            if list is not None:
+            if list is not None or 'all' in list:
              src_db2_obj_list = list.split(",")
             else:
               list = None
+            if list is None and 'all' not in list:
+                print("The list provided is empty. Kindly give all or a list of tablespaces/schemas")
+                sys.exit(0)
             skip_tbspace_list = skip_tbspace.split(",")
             skip_schema_list = skip_schema.split(",")
             dest_tbspace_list = dest_tbspace.split(",")
@@ -410,7 +420,7 @@ def move(
                         for tbspace in tbspace_list:
                             tables_in_userspace = []
                             if tbspace not in skip_tbspace_list:
-                                if tbspace != dest_tbspace:
+                                if tbspace not in dest_tbspace_list:
                                     tables_in_userspace = get_tabname_schemaname_under_tablespace_in_db2woc(
                                         user_id, password, hostname, port, database, tbspace,valid_dsn)
                                     print(
