@@ -873,13 +873,11 @@ def get_list_of_objectspaces(user_id, password, hostname, port, database,dsn:str
         conn = cnxn.cursor()
         conn.execute(GET_STORAGE_PATH_DEFINED_IN_INSTANCE)
         rows = conn.fetchall()
-        print(rows)
         for item in rows:
             print(item[0],item[1])
             if  "DB2REMOTE" in item[1]:
                 conn.execute(GET_OBJECTSPACE_USING_SGNAME.format(SGNAME=item[0]))
                 rows = conn.fetchall()
-                print(rows)
                 for item in rows:
                     object_space_list.append(item[0])
                 cnxn.close()
