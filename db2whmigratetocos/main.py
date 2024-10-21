@@ -362,10 +362,16 @@ def move(
                 sys.exit(0)
             if skip_tbspace is not None:
                skip_tbspace_list = skip_tbspace.split(",")
+            else:
+                skip_tbspace_list = []
             if skip_schema is not None:
                skip_schema_list = skip_schema.split(",")
+            else:
+                skip_schema_list = []
             if dest_tbspace is not None:
                dest_tbspace_list = dest_tbspace.split(",")
+            else:
+                dest_tbspace_list = []
             if csv_input is not  None:
                 if '.csv' in csv_input:
                     print("Validating the CSV file path")
