@@ -328,6 +328,7 @@ def move(
     """
     try:
         valid_dsn = ""
+
         if dsn is not None:
          valid_dsn = dsn
          conn_test = db2wh_pyodbc_connection(
@@ -359,11 +360,11 @@ def move(
             if list is None and 'all' not in list:
                 print("The list provided is empty. Kindly give all or a list of tablespaces/schemas")
                 sys.exit(0)
-            if skip_tbspace_list is not None:
+            if skip_tbspace is not None:
                skip_tbspace_list = skip_tbspace.split(",")
-            if skip_schema_list is not None:
+            if skip_schema is not None:
                skip_schema_list = skip_schema.split(",")
-            if dest_tbspace_list is not None:
+            if dest_tbspace is not None:
                dest_tbspace_list = dest_tbspace.split(",")
             if csv_input is not  None:
                 if '.csv' in csv_input:
