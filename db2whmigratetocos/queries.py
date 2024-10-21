@@ -7,6 +7,8 @@
 
 LIST_TBSPACES = "select TBSPACE from syscat.tablespaces"
 LIST_SCHEMAS = "select SCHEMANAME from syscat.schemata"
+CHECK_TBPSACE = "select TBSPACE from syscat.tablespaces WHERE TBSPACE='{TABLESPACE_NAME}'"
+CHECK_SCHEMA = "select SCHEMANAME from syscat.schemata WHERE SCHEMANAME='{SCHEMA_NAME}'"
 LIST_TABLES_IN_TSPACE = "select TABNAME,TABSCHEMA from syscat.tables where TBSPACE='{TABLESPACE}' AND TABLEORG='C' "
 LIST_TABLES_IN_SCHEMA = "select TABNAME from syscat.tables where TABSCHEMA ='{SCHEMANAME}' AND TABLEORG='C' "
 LIST_TBSPACE_BY_TABNAME = "select TBSPACE from syscat.tables where TABNAME = '{TABNAME}' AND TABSCHEMA ='{SCHEMANAME}'"

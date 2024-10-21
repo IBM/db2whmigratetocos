@@ -98,6 +98,7 @@ def list(
          conn_status = db2wh_pyodbc_connection(
             user_id, password, hostname, port, database, True,valid_dsn)
         else:
+            valid_dsn = None
             conn_status = db2wh_pyodbc_connection(
             user_id, password, hostname, port, database, True,valid_dsn)
         print()
@@ -296,9 +297,9 @@ def move(
         user_id: Annotated[str, typer.Option(
             help="User Id to connect to Db2 warehouse Instance")] = "db2inst1",
         skip_schema: Annotated[str, typer.Option(
-            help="Skips an individual schema or a set of schmeas in the list of source tablespaces")] = "none",
+            help="Skips an individual schema or a set of schmeas in the list of source tablespaces")] = None,
         skip_tbspace: Annotated[str, typer.Option(
-            help="Source tablespaces in block that needs to be skipped - none/comma seperated list of tablespaces")] = "none",
+            help="Source tablespaces in block that needs to be skipped - none/comma seperated list of tablespaces")] =None,
         database: Annotated[str, typer.Option(
             help="Database to be connected")] = "BLUDB",
         port: Annotated[str, typer.Option(help="Port to be used for Db2 warehouse Instance")] = "50001"):
@@ -332,6 +333,7 @@ def move(
          conn_test = db2wh_pyodbc_connection(
             user_id, password, hostname, port, database, True,dsn)
         else:
+         valid_dsn = None
          conn_test = db2wh_pyodbc_connection(
             user_id, password, hostname, port, database, True,valid_dsn)
         log_directory_base_path = " "
@@ -357,10 +359,13 @@ def move(
             if list is None and 'all' not in list:
                 print("The list provided is empty. Kindly give all or a list of tablespaces/schemas")
                 sys.exit(0)
-            skip_tbspace_list = skip_tbspace.split(",")
-            skip_schema_list = skip_schema.split(",")
-            dest_tbspace_list = dest_tbspace.split(",")
-            if csv_input != None:
+            if skip_tbspace_list is not None:
+               skip_tbspace_list = skip_tbspace.split(",")
+            if skip_schema_list is not None:
+               skip_schema_list = skip_schema.split(",")
+            if dest_tbspace_list is not None:
+               dest_tbspace_list = dest_tbspace.split(",")
+            if csv_input is not  None:
                 if '.csv' in csv_input:
                     print("Validating the CSV file path")
                     if os.path.isfile(csv_input):
@@ -497,7 +502,7 @@ def move(
                                     print(
                                         "Initiating the migration for each of the table, proceeding with next steps....")
                                     if len(tables_in_schema) != 0:
-                                        log_directory_name =create_a_log_directory_for_a_batch(log_directory_base_path)
+                                        log_directory_name = create_a_log_directory_for_a_batch(log_directory_base_path)
                                         for idx, item in enumerate(tables_in_schema):
                                             selected_dest_tbspace = idx % len(dest_tbspace_list)
                                             source_tablespace = get_tbpsace_name_for_table(
@@ -516,7 +521,7 @@ def move(
             if scope == "table":
                 if schema_name is not None:
                     if table_name is not None:
-                        log_directory_name =create_a_log_directory_for_a_batch(log_directory_base_path)
+                        log_directory_name = create_a_log_directory_for_a_batch(log_directory_base_path)
                         source_tablespace = get_tbpsace_name_for_table(user_id, password, hostname, port, database, item[0], schema,valid_dsn)
                         selected_dest_tbspace = idx % len(dest_tbspace_list)
                         if source_tablespace not in dest_tbspace_list:
@@ -558,6 +563,15 @@ def status(
      --user-id <user-id> --password <password> --hostname <host-name>
 
     '''
+    valid_dsn = ""
+    if dsn is not None:
+        valid_dsn = dsn
+        conn_test = db2wh_pyodbc_connection(
+            user_id, password, hostname, port, database, True,dsn)
+    else:
+         valid_dsn = None
+         conn_test = db2wh_pyodbc_connection(
+            user_id, password, hostname, port, database, True,valid_dsn)
     tables_in_block = []
     tables_in_cos = []
     total_tables_in_block = 0
