@@ -79,7 +79,7 @@ def get_connection_string(user: str, password: str, hostname: str, port: str, da
         _type_: _description_
     """
 
-    if dsn != "":
+    if dsn is not None:
         driver = "Driver={"+dsn+"};"
     else:
         home_path = check_home_path()

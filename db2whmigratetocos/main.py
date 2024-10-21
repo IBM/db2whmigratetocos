@@ -57,7 +57,7 @@ def list(
         password: Annotated[str, typer.Option(help="Password of the User ID")],
         hostname: Annotated[str, typer.Option(help="Hostname of the Db2 warehouse Instance")],
         dsn: Annotated[str, typer.Option(
-            help="Pass the DSN name if it is already configured")] = " ",
+            help="Pass the DSN name if it is already configured")] = None,
         scope: Annotated[str, typer.Option(
             help="List the tables by tablespace/schema")] = "tablespace",
         list: Annotated[str, typer.Option(
@@ -91,10 +91,9 @@ def list(
     """
     try:
         print()
-        valid_dsn = " "
-        ##TODO write fumction to validate the dsn from odbc and  check for path variables as well
+        valid_dsn =  None
         console.print("Test Connect to the Db2 warehouse instance")
-        if dsn !=" ":
+        if dsn is not None:
          valid_dsn = dsn
          conn_status = db2wh_pyodbc_connection(
             user_id, password, hostname, port, database, True,valid_dsn)
@@ -212,7 +211,7 @@ def list(
                             for schema in schema_list:
                                 print()
                                 console.rule(
-                                    f"[bold red]Tables in Schema - {schema}")
+                                    f"[bold orange4 italic]Tables in Schema - {schema}")
                                 table_cnt, total_estimate, tables = get_tables_under_schema_in_db2woc(
                                     user_id, password, hostname, port, database, schema,valid_dsn)
                                 sc_table = Table()
@@ -563,7 +562,7 @@ def status(
     tables_in_cos = []
     total_tables_in_block = 0
     if log_directory_path != None:
-     path = log_directory_path+"/db2whmigratetocos-logs/"
+     path = log_directory_path+"db2whmigratetocos-logs/"
     else:
      print("Please provide the log path to know the status of the migration runs")
      sys.exit(0)
@@ -589,8 +588,8 @@ def status(
         console.rule("[bold red]Migration Runs")
         print(
             "To check the complete logs and metrics,please find the log file in the respective location:")
-        print(path+"/<batch-id>/<job-id>-<table-name>.json")
-        print(path+"/<batch-id>/<job-id>-<table-name>.log")
+        print(path+"<batch-id>/<job-id>-<table-name>.json")
+        print(path+"<batch-id>/<job-id>-<table-name>.log")
         print()
         is_exist = os.path.exists(path)
         active_migration_job_details = []
@@ -651,7 +650,6 @@ def cancel(
         print()
         console.print("Test Connect to the Db2 warehouse instance")
         if conn_test:
-            ##TODO change dsn in the  admin_move_table.py
             print("Canceling the table migration")
             cancel_terminate_admin_move_table(user_id, password, hostname, port, database, schema_name, table_name, "TERM", src_tablespace, dest_tablespace,dsn)
             cancel_terminate_admin_move_table(user_id, password, hostname, port, database, schema_name, table_name, "CANCEL", src_tablespace, dest_tablespace,dsn)
