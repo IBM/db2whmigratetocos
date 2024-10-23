@@ -16,12 +16,12 @@ echo "PIP install dependencies"
 pipdeps=$(ls | grep -G pip-files.tar.gz)
 tar -xvzf "$pipdeps"
 pipfiles=$(ls | grep -G pip-files)
-pip install pip-files/* --force-reinstall
+pip3 install pip-files/* --force-reinstall
 
 echo "Db2whmigratetocos tool"
 db2whmigratetocoswheel=$( ls |  grep -G  *.whl)
 echo "$db2whmigratetocoswheel"
-pip install "$db2whmigratetocoswheel" --force-reinstall
+pip3 install "$db2whmigratetocoswheel" --force-reinstall
 is_found=0
 echo "Odbc installation checking"
 odbccheck=$(odbcinst -j)
@@ -35,7 +35,7 @@ if [[ "$odbccheck" =~ "unixODBC" ]]; then
     done < odbc.txt
     DB2DRIVER=0
     for a in "${!arr1[@]}"; do
-        if [[ "${arr1[a]}" =~ "/opt/ibm/db2/" ]]; then
+        if [[ "${arr1[a]}" =~ "/opt/ibm/db2/" ]]; then #inclucde the IBM case as wellm 
           echo "${arr1[a]}"
           DB2DRIVER=$a
           is_found=1

@@ -803,6 +803,7 @@ def export_the_data_as_csv(tables, filename_prefix):
     df.to_csv(filename, index=False)
     console.print("Exporting the list of tables in the schema")
     print(f"Data saved to CSV file: {filename}")
+    return filename
 
 
 def get_the_original_tablename_from_admin_move_table(tablename, user_id, password, hostname, port, database,dsn):

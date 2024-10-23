@@ -173,8 +173,9 @@ def list(
                                     console.print(
                                         "No tables found in the tablespace")
                             if export_csv is True:
-                                export_the_data_as_csv(
+                               filename =  export_the_data_as_csv(
                                     tables_list_in_tablespaces, "db2whmigratetocos-tables-list-")
+                               return filename
                         else:
                             print_export_tables_in_block_and_cos(
                                 tablespace_list, export_csv)
@@ -245,8 +246,9 @@ def list(
                                         "No tables found in the schema")
                                     print()
                             if export_csv is True:
-                                export_the_data_as_csv(
+                                filename = export_the_data_as_csv(
                                     tables_in_schema, "db2whmigratetocos-schemas-tables-list-")
+                                return filename
                         else:
                             schema_table = Table(show_footer=False)
                             for row in schema_list:
@@ -353,13 +355,11 @@ def move(
             print('The index tablespace cannot be a remote tablespace')
             sys.exit(0)
         if conn_test:
-            if list is not None or 'all' in list:
-             src_db2_obj_list = list.split(",")
-            else:
-              list = None
-            if list is None and 'all' not in list:
+            if list is None and csv_input is None:
                 print("The list provided is empty. Kindly give all or a list of tablespaces/schemas")
                 sys.exit(0)
+            if list is not None:
+             src_db2_obj_list = list.split(",")
             if skip_tbspace is not None:
                skip_tbspace_list = skip_tbspace.split(",")
             else:
@@ -386,7 +386,7 @@ def move(
             if scope == "tablespace":
                 valid_tbspace_list = get_tablespaces_in_block_and_cos(
                     user_id, password, hostname, port, database,valid_dsn)
-                if csv_input != None:
+                if csv_input is not None:
                     tables_in_df = validate_and_get_df_from_the_csv(
                         csv_input)
                     if len(tables_in_df) > 1:
