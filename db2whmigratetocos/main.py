@@ -16,7 +16,7 @@ import pandas as pd
 import typer
 from db2whmigratetocos.admin_move_table_func import cancel_terminate_admin_move_table
 from db2whmigratetocos.constants import STATUS_TABLE_HEADER, STATUS_TABLE_HEADER_ACTIVE_RUNS
-from db2whmigratetocos.db2wh_db2_utilities import check_home_path, check_if_logs_path_exist_else_create, create_a_log_directory_for_a_batch, db2wh_pyodbc_connection, export_the_data_as_csv, get_list_of_objectspaces, get_schema_in_instance, get_tables_cnt_under_tablespaces, get_tables_under_schema_in_db2woc, get_tables_under_tablespace_in_db2woc, get_tablespaces_in_block_and_cos, get_tabname_schemaname_under_tablespace_in_db2woc, get_tbpsace_name_for_table, list_migration_runs, move_the_tables, parse_the_json_files_for_status, print_export_tables_in_block_and_cos, print_table_row, validate_and_get_df_from_the_csv, validate_the_input_db2_objects
+from db2whmigratetocos.db2wh_db2_utilities import check_home_path, check_if_logs_path_exist_else_create, create_a_log_directory_for_a_batch, db2wh_pyodbc_connection, export_the_data_as_csv, get_list_of_objectspaces, get_schema_in_instance, get_tables_cnt_under_tablespaces, get_tables_under_schem_notabsize_in_db2woc, get_tables_under_schema_in_db2woc, get_tables_under_tablespace_in_db2woc, get_tables_under_tablespace_no_tabsize_in_db2woc, get_tablespaces_in_block_and_cos, get_tabname_schemaname_under_tablespace_in_db2woc, get_tbpsace_name_for_table, list_migration_runs, move_the_tables, parse_the_json_files_for_status, print_export_tables_in_block_and_cos, print_table_row, validate_and_get_df_from_the_csv, validate_the_input_db2_objects
 from .db2whmigratetocos_install_prereq import db2whmigratetocos_init
 
 app = typer.Typer()
@@ -117,6 +117,7 @@ def list(
             if scope == "tablespace":
                 print()
                 console.print("Listing the tablespaces")
+                object_space_list = get_list_of_objectspaces(user_id,password,hostname,port,database,valid_dsn)
                 # validating the tablespace list
                 if all_objects == 'all':
                     tablespace_list = valid_tablespace_list
@@ -135,7 +136,6 @@ def list(
                                 "Displaying till 75 tables for each tablespace")
                             print()
                             tables_list_in_tablespaces = []
-                            object_space_list = get_list_of_objectspaces(user_id,password,hostname,port,database,valid_dsn)
                             print(object_space_list)
                             for tbspace in tablespace_list:
                                 tbspace_store = " "
@@ -177,8 +177,42 @@ def list(
                                     tables_list_in_tablespaces, "db2whmigratetocos-tables-list-")
                                return filename
                         else:
-                            print_export_tables_in_block_and_cos(
-                                tablespace_list, export_csv)
+                            tables_list_in_tablespaces = []
+                            for tbspace in tablespace_list:
+                                tbspace_store = " "
+                                if len(object_space_list) != 0:
+                                    tbspace_store = "cos" if tbspace in object_space_list else "block-storage"
+                                print()
+                                console.rule(
+                                    f"[bold orange4 italic]Tables in Tablespace - {tbspace}")
+                                tables, table_cnt = get_tables_under_tablespace_no_tabsize_in_db2woc(
+                                    user_id, password, hostname, port, database, tbspace,valid_dsn)
+                                tb_table = Table()
+                                tb_table.add_column(
+                                    "Tablename", justify="center", style="cyan")
+                                tb_table.add_column(
+                                    "Schema", justify="center", style="cyan")
+                                if len(tables) != 0:
+                                    console.print(
+                                        f"The total number of tables in tablespace is {table_cnt}")
+                                    count = 0
+                                    for table in tables:
+                                        count = count+1
+                                        if count <= 75:
+                                            tb_table.add_row(
+                                                table[0], table[1])
+                                        tables_list_in_tablespaces.append(
+                                            [tbspace, table[0], table[1]," ",str(tbspace_store)])
+                                    print()
+                                    console.print(tb_table)
+                                else:
+                                    print()
+                                    console.print(
+                                        "No tables found in the tablespace")
+                            if export_csv is True:
+                               filename =  export_the_data_as_csv(
+                                    tables_list_in_tablespaces, "db2whmigratetocos-tables-list-nodetail-")
+                               return filename
                     else:
                         print()
                         print("No Tablespaces found")
@@ -250,20 +284,51 @@ def list(
                                     tables_in_schema, "db2whmigratetocos-schemas-tables-list-")
                                 return filename
                         else:
-                            schema_table = Table(show_footer=False)
-                            for row in schema_list:
-                                schema_table.add_row(str(row))
-                            console.print(schema_table)
+                            print()
+                            console.print(
+                                "Gathering the information about the tables in the schema")
+                            console.print(
+                                "Displaying till 75 tables for each schema")
+                            print()
+                            tables_in_schema = []
+                            object_space_list = get_list_of_objectspaces(user_id,password,hostname,port,database,valid_dsn)
+                            for schema in schema_list:
+                                print()
+                                console.rule(
+                                    f"[bold orange4 italic]Tables in Schema - {schema}")
+                                table_cnt,tables = get_tables_under_schem_notabsize_in_db2woc(
+                                    user_id, password, hostname, port, database, schema,valid_dsn)
+                                sc_table = Table()
+                                sc_table.add_column(
+                                    "Tablename", justify="center", style="cyan")
+                                sc_table.add_column(
+                                    "Schemaname", justify="center", style="cyan")
+                                if len(tables) != 0:
+                                    console.print(
+                                        f"The total number of tables in schema is {table_cnt}")
+                                    count = 0
+                                    for table in tables:
+                                        tbspace_store = ""
+                                        table_tablespace = get_tbpsace_name_for_table(
+                                            user_id, password, hostname, port, database, table[0], schema,valid_dsn)
+                                        if len(object_space_list) != 0:
+                                                 tbspace_store = "cos" if table_tablespace in object_space_list else "block-storage"
+                                        count = count+1
+                                        if count <= 75:
+                                            sc_table.add_row(
+                                                table[0],schema)
+                                        tables_in_schema.append(
+                                            [table_tablespace, table[0], schema," ",str(tbspace_store)])
+                                    console.print(sc_table)
+                                else:
+                                    print()
+                                    console.print(
+                                        "No tables found in the schema")
+                                    print()
                             if export_csv is True:
-                                console.print(
-                                    "Exporting the schema list into CSV")
-                                df = pd.DataFrame(
-                                    schema_list, columns=["schema"])
-                                filename = "db2whmigratetocos-schemas-list-"+datetime.now().isoformat()+".csv"
-                                df.to_csv(filename, index=False)
-                                console.print(
-                                    "Exporting the list of tables in the schema")
-                                print(f"Data saved to CSV file: {filename}")
+                                filename = export_the_data_as_csv(
+                                    tables_in_schema, "db2whmigratetocos-schemas-tables-list-nodetail")
+                                return filename
             if scope != "schema" and scope != "tablespace":
                 print(
                     "No suitable db2 object name is given. Kindly try giving tablespace/schema")
@@ -355,7 +420,7 @@ def move(
             print('The index tablespace cannot be a remote tablespace')
             sys.exit(0)
         if conn_test:
-            if list is None and csv_input is None:
+            if list is None and csv_input is None and scope!="table":
                 print("The list provided is empty. Kindly give all or a list of tablespaces/schemas")
                 sys.exit(0)
             if list is not None:
@@ -529,10 +594,9 @@ def move(
                 if schema_name is not None:
                     if table_name is not None:
                         log_directory_name = create_a_log_directory_for_a_batch(log_directory_base_path)
-                        source_tablespace = get_tbpsace_name_for_table(user_id, password, hostname, port, database, item[0], schema,valid_dsn)
-                        selected_dest_tbspace = idx % len(dest_tbspace_list)
+                        source_tablespace = get_tbpsace_name_for_table(user_id, password, hostname, port, database,table_name, schema_name,valid_dsn)
                         if source_tablespace not in dest_tbspace_list:
-                             move_the_tables(schema_name,table_name, source_tablespace, dest_tbspace_list[selected_dest_tbspace], log_directory_name, user_id, password, hostname, port, database,valid_dsn)
+                             move_the_tables(schema_name,table_name, source_tablespace, dest_tbspace_list[0], log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace)
                     else:
                         print("The table name is not provided") 
                 else:
@@ -553,7 +617,7 @@ def status(
         log_directory_path: Annotated[str, typer.Option(
             help="Pass the DSN name if it is already configured")] = None,
         dsn: Annotated[str, typer.Option(
-            help="Pass the DSN name if it is already configured")] = " ",
+            help="Pass the DSN name if it is already configured")] = None,
         database: Annotated[str, typer.Option(
             help="Database to be connected")] = "BLUDB",
         active_runs: Annotated[bool, typer.Option(help="active - lists the active migration runs;completed - lists the completed migration runs")] = False,
@@ -570,7 +634,7 @@ def status(
      --user-id <user-id> --password <password> --hostname <host-name>
 
     '''
-    valid_dsn = ""
+    valid_dsn = " "
     if dsn is not None:
         valid_dsn = dsn
         conn_test = db2wh_pyodbc_connection(
@@ -579,67 +643,67 @@ def status(
          valid_dsn = None
          conn_test = db2wh_pyodbc_connection(
             user_id, password, hostname, port, database, True,valid_dsn)
-    tables_in_block = []
-    tables_in_cos = []
-    total_tables_in_block = 0
-    if log_directory_path != None:
-     path = log_directory_path+"db2whmigratetocos-logs/"
-    else:
-     print("Please provide the log path to know the status of the migration runs")
-     sys.exit(0)
-    if scope == "tables":
-        tablespaces_in_instance = get_tablespaces_in_block_and_cos(
-            user_id, password, hostname, port, database,dsn)
-        if len(tablespaces_in_instance) != 0:
-            for tablespace in tablespaces_in_instance:
-                table_in_tbspace = get_tables_cnt_under_tablespaces(
-                    user_id, password, hostname, port, database, tablespace,dsn)
-                if "OBJ" not in tablespace:
-                    total_tables_in_block = total_tables_in_block + table_in_tbspace
-                    tables_in_block.append([tablespace, table_in_tbspace])
-                else:
-                    tables_in_cos.append([tablespace, table_in_tbspace])
-            console.rule("[bold red]Tablespaces in Block")
-            print_tables_in_block = print_table_row(tables_in_block)
-            console.print(print_tables_in_block)
-            console.rule("[bold red]Tablespaces in COS")
-            print_in_tables_in_cos = print_table_row(tables_in_cos)
-            console.print(print_in_tables_in_cos)
-    if scope == "migration-runs":
-        console.rule("[bold red]Migration Runs")
-        print(
-            "To check the complete logs and metrics,please find the log file in the respective location:")
-        print(path+"<batch-id>/<job-id>-<table-name>.json")
-        print(path+"<batch-id>/<job-id>-<table-name>.log")
-        print()
-        is_exist = os.path.exists(path)
-        active_migration_job_details = []
-        completed_migration_job_details = []
-        if is_exist:
-            migration_batches = os.listdir(path)
-            if len(migration_batches) != 0:
-                active_migration_job_details, completed_migration_job_details = list_migration_runs(
-                    migration_batches, path)
-                if active_runs is True:
-                    if len(active_migration_job_details) != 0:
-                        tb_table_migration_runs = parse_the_json_files_for_status(
-                            active_migration_job_details, user_id, password, hostname, port, database, STATUS_TABLE_HEADER_ACTIVE_RUNS, active_runs,dsn)
-                        console.print(tb_table_migration_runs)
-                    else:
-                        print("No active migration runs yet in the instance")
-                else:
-                    if len(completed_migration_job_details) != 0:
-                        tb_table_migration_runs = parse_the_json_files_for_status(
-                            completed_migration_job_details, user_id, password, hostname, port, database, STATUS_TABLE_HEADER, active_runs,dsn)
-                        console.print(tb_table_migration_runs)
-                    else:
-                        print("No migration runs yet in the instance")
-            else:
-                print("No migration runs yet in the instance")
+    if conn_test:
+        tables_in_block = []
+        tables_in_cos = []
+        total_tables_in_block = 0
+        if log_directory_path is not  None:
+          path = log_directory_path+"/db2whmigratetocos-logs/"
         else:
-            print("The logs folder is not present")
-            print("Creating the log folder in - " + path)
-            check_if_logs_path_exist_else_create(path)
+                 print("Please provide the log path to know the status of the migration runs")
+                 sys.exit(0)
+        if scope == "tables":
+            tablespaces_in_instance = get_tablespaces_in_block_and_cos(
+                user_id, password, hostname, port, database,dsn)
+            if len(tablespaces_in_instance) != 0:
+                for tablespace in tablespaces_in_instance:
+                    table_in_tbspace = get_tables_cnt_under_tablespaces(
+                        user_id, password, hostname, port, database, tablespace,dsn)
+                    if "OBJ" not in tablespace:
+                        total_tables_in_block = total_tables_in_block + table_in_tbspace
+                        tables_in_block.append([tablespace, table_in_tbspace])
+                    else:
+                        tables_in_cos.append([tablespace, table_in_tbspace])
+                console.rule("[bold red]Tablespaces in Block")
+                print_tables_in_block = print_table_row(tables_in_block)
+                console.print(print_tables_in_block)
+                console.rule("[bold red]Tablespaces in COS")
+                print_in_tables_in_cos = print_table_row(tables_in_cos)
+                console.print(print_in_tables_in_cos)
+        if scope == "migration-runs":
+            console.rule("[bold red]Migration Runs")
+            print(
+                "To check the complete logs and metrics,please find the log file in the respective location:")
+            print(path+"<batch-id>/<job-id>-<table-name>.json")
+            print(path+"<batch-id>/<job-id>-<table-name>.log")
+            print()
+            is_exist = os.path.exists(path)
+            active_migration_job_details = []
+            completed_migration_job_details = []
+            if is_exist:
+                migration_batches = os.listdir(path)
+                if len(migration_batches) != 0:
+                    active_migration_job_details, completed_migration_job_details = list_migration_runs(
+                        migration_batches, path)
+                    if active_runs is True:
+                        if len(active_migration_job_details) != 0:
+                            tb_table_migration_runs = parse_the_json_files_for_status(
+                                active_migration_job_details, user_id, password, hostname, port, database, STATUS_TABLE_HEADER_ACTIVE_RUNS, active_runs,dsn)
+                            console.print(tb_table_migration_runs)
+                        else:
+                            print("No active migration runs yet in the instance")
+                    else:
+                        if len(completed_migration_job_details) != 0:
+                            tb_table_migration_runs = parse_the_json_files_for_status(
+                                completed_migration_job_details, user_id, password, hostname, port, database, STATUS_TABLE_HEADER, active_runs,dsn)
+                            console.print(tb_table_migration_runs)
+                        else:
+                            print("No migration runs yet in the instance")
+                else:
+                    print("No migration runs yet in the instance")
+            else:
+                print("The db2whmigratetocos-logs folder is not present in the given path")
+                
    
 @ app.command()
 def cancel(

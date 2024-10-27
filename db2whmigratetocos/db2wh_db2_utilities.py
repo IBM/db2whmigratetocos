@@ -78,7 +78,7 @@ def get_tablespaces_in_block_and_cos(user: str, password: str, hostname: str, po
         rows = conn.fetchall()
         cnxn.close()
         for item in rows:
-            if "SYS" not in item[0] and "TS4CONSOLE" not in item[0] and "BIGSQLCATUTILITY" not in item[0] and "TEMP" not in item[0] and "TMP" not in item[0]:
+            if "SYS" not in item[0] and "TS4CONSOLE" not in item[0] and "TS4MONITOR" not in item[0]   and "BIGSQLCATUTILITY" not in item[0] and "TEMP" not in item[0] and "TMP" not in item[0]:
                 user_tablespaces_list.append(item[0])
         return user_tablespaces_list
     except Exception as e:
@@ -107,7 +107,7 @@ def get_schema_in_instance(user: str, password: str, hostname: str, port: str, d
         rows = conn.fetchall()
         cnxn.close()
         for item in rows:
-            if "SYS" not in item[0] and "NULL" not in item[0] and "SQL" not in item[0] and "IBMPDQ" not in item[0] and "DEFAULT" not in item[0]:
+            if "SYS" not in item[0] and "NULL" not in item[0] and "TS4" not in item[0] and "SQL" not in item[0] and "IBMPDQ" not in item[0] and "DEFAULT" not in item[0]:
                 user_schemas_list.append(item[0].strip())
         return user_schemas_list
     except Exception as e:
@@ -147,6 +147,37 @@ def get_tables_under_schema_in_db2woc(user: str, password: str, hostname: str, p
         return table_cnt, total_estimate_size, tables_in_schema
     except Exception as e:
         print(e)
+
+def get_tables_under_schem_notabsize_in_db2woc(user: str, password: str, hostname: str, port: str, database: str, schemaname: str,dsn:str):
+    """_summary_
+
+    Args:
+        user (str): _description_
+        password (str): _description_
+        hostname (str): _description_
+        port (str): _description_
+        database (str): _description_
+        schemaname (str): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    try:
+        tables_in_schema = []
+        total_estimate_size = 0
+        cnxn = db2wh_pyodbc_connection(
+            user, password, hostname, port, database, False,dsn)
+        conn = cnxn.cursor()
+        conn.execute(LIST_TABLES_IN_SCHEMA.format(SCHEMANAME=schemaname))
+        rows = conn.fetchall()
+        cnxn.close()
+        table_cnt = len(rows)
+        for item in rows:
+            tables_in_schema.append([item[0]])
+        return table_cnt, tables_in_schema
+    except Exception as e:
+        print(e)
+
 
 
 def tab_size_by_table_name(user: str, password: str, hostname: str, port: str, database: str, schemaname: str, tablename: str,dsn:str):
@@ -212,6 +243,40 @@ def get_tables_under_tablespace_in_db2woc(user: str, password: str, hostname: st
                         table_names_in_tablespace.append(
                             [item[0], item[1], est_size])
         return total_estimate_size, table_names_in_tablespace, table_cnt
+    except Exception as e:
+        print(e)
+
+def get_tables_under_tablespace_no_tabsize_in_db2woc(user: str, password: str, hostname: str, port: str, database: str, tablespace: str,dsn:str):
+    """_summary_
+
+    Args:
+        user (str): _description_
+        password (str): _description_
+        hostname (str): _description_
+        port (str): _description_
+        database (str): _description_
+        tablespace (str): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    try:
+        table_names_in_tablespace = []
+        cnxn = db2wh_pyodbc_connection(
+            user, password, hostname, port, database, False,dsn)
+        conn = cnxn.cursor()
+        table_cnt = 0
+        conn.execute(LIST_TABLES_IN_TSPACE.format(TABLESPACE=tablespace))
+        rows = conn.fetchall()
+        cnxn.close()
+        with console.status(""):
+            for item in rows:
+                if "SYS" not in item[1]:
+                    if str(item[0]).endswith('t') is False:
+                        table_cnt = table_cnt + 1
+                        table_names_in_tablespace.append(
+                            [item[0], item[1]])
+        return table_names_in_tablespace, table_cnt
     except Exception as e:
         print(e)
 
@@ -796,12 +861,11 @@ def print_export_tables_in_block_and_cos(tablespace_list, export_csv):
 
 
 def export_the_data_as_csv(tables, filename_prefix):
-    console.print("Exporting the schema data into CSV")
+    console.print("Exporting the data into CSV")
     columns = TABLESPACE_CSV_COLUMNS
     df = pd.DataFrame(tables, columns=columns)
     filename = filename_prefix + datetime.now().isoformat()+".csv"
     df.to_csv(filename, index=False)
-    console.print("Exporting the list of tables in the schema")
     print(f"Data saved to CSV file: {filename}")
     return filename
 
@@ -875,7 +939,6 @@ def get_list_of_objectspaces(user_id, password, hostname, port, database,dsn:str
         conn.execute(GET_STORAGE_PATH_DEFINED_IN_INSTANCE)
         rows = conn.fetchall()
         for item in rows:
-            print(item[0],item[1])
             if  "DB2REMOTE" in item[1]:
                 conn.execute(GET_OBJECTSPACE_USING_SGNAME.format(SGNAME=item[0]))
                 rows = conn.fetchall()
