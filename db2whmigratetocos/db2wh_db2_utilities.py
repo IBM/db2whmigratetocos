@@ -718,7 +718,7 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
 
 # move utilities
 
-def move_the_tables(schema, tablename, source_tablespace, dest_tbspace, log_directory_name, user_id, password, hostname, port, database,dsn,index_tbspace):
+def move_the_tables(schema, tablename, source_tablespace, dest_tbspace, log_directory_name, user_id, password, hostname, port, database,dsn,index_tbspace,copy_opts):
     """_summary_
 
     Args:
@@ -752,7 +752,7 @@ def move_the_tables(schema, tablename, source_tablespace, dest_tbspace, log_dire
               "/"+report_file_name_for_the_table)
         print("Logs in " + log_directory_name+"/"+std_output_name_for_the_file)
         adm_move_table_ops_db2woc(user_id, password, hostname, port, database, schema, tablename, "INIT", source_tablespace,
-                                  dest_tbspace, log_directory_name+"/"+report_file_name_for_the_table, log_directory_name+"/"+std_output_name_for_the_file,dsn,index_tbspace)
+                                  dest_tbspace, log_directory_name+"/"+report_file_name_for_the_table, log_directory_name+"/"+std_output_name_for_the_file,dsn,index_tbspace,copy_opts)
 
 
 def validate_the_input_db2_objects(input_list, valid_list, obj_name):

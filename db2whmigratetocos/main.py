@@ -345,6 +345,7 @@ def move(
         hostname: Annotated[str, typer.Option(help="Hostname of the Db2 warehouse Instance")],
         list: Annotated[str, typer.Option(
             help="Source tablespace/schema in block storage - all/comma seperated list of tablespace/schema")] = None,
+        use_adc: Annotated[bool, typer.Option(help=" Uses Sampling method to  create dictionary by default - give --use-adc to use ADC for dictionary creation")] = False,
         csv_input: Annotated[str, typer.Option(
             help="CSV file as input to the move command as .csv file without the path")] = None,
         dsn: Annotated[str, typer.Option(
@@ -394,7 +395,7 @@ def move(
 
     """
     try:
-        valid_dsn = ""
+        valid_dsn = " "
 
         if dsn is not None:
          valid_dsn = dsn
@@ -420,6 +421,10 @@ def move(
             print('The index tablespace cannot be a remote tablespace')
             sys.exit(0)
         if conn_test:
+            if use_adc is False:
+                copy_opts = "COPY_USE_OTA,COPY_USE_RID=0,NO_STATS"
+            else:
+                copy_opts = "COPY_USE_OTA,USE_ADC,COPY_USE_RID=0,NO_STATS"
             if list is None and csv_input is None and scope!="table":
                 print("The list provided is empty. Kindly give all or a list of tablespaces/schemas")
                 sys.exit(0)
@@ -507,7 +512,7 @@ def move(
                                             selected_dest_tbspace = idx % len(
                                                 dest_tbspace_list)
                                             move_the_tables(items[1], items[0], tbspace, dest_tbspace_list[selected_dest_tbspace],
-                                                            log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace)
+                                                            log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,copy_opts)
                                     if len(tables_in_userspace) == 0:
                                         print("No tables found in the tablespace")
                                 else:
@@ -540,7 +545,7 @@ def move(
                                             selected_dest_tbspace = idx % len(dest_tbspace_list)
                                             if source_tablespace not in dest_tbspace_list:
                                                 move_the_tables(row['schema'], row['tablename'], source_tablespace, dest_tbspace_list[selected_dest_tbspace],
-                                                                log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace)
+                                                                log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,copy_opts)
                                                 print("here")
                                             else:
                                                 print(
@@ -581,7 +586,7 @@ def move(
                                                 user_id, password, hostname, port, database, item[0], schema,valid_dsn)
                                             if source_tablespace not in dest_tbspace_list:
                                                 move_the_tables(
-                                                    schema, item[0], source_tablespace, dest_tbspace_list[selected_dest_tbspace], log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace)
+                                                    schema, item[0], source_tablespace, dest_tbspace_list[selected_dest_tbspace], log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,copy_opts)
                                     if len(tables_in_schema) == 0:
                                         print("No tables found in the schema")
                                 else:
@@ -596,7 +601,7 @@ def move(
                         log_directory_name = create_a_log_directory_for_a_batch(log_directory_base_path)
                         source_tablespace = get_tbpsace_name_for_table(user_id, password, hostname, port, database,table_name, schema_name,valid_dsn)
                         if source_tablespace not in dest_tbspace_list:
-                             move_the_tables(schema_name,table_name, source_tablespace, dest_tbspace_list[0], log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace)
+                             move_the_tables(schema_name,table_name, source_tablespace, dest_tbspace_list[0], log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,copy_opts)
                     else:
                         print("The table name is not provided") 
                 else:
@@ -711,6 +716,8 @@ def cancel(
         table_name: Annotated[str, typer.Option(help="Table Name to cancel the run")],
         src_tablespace: Annotated[str, typer.Option(help="Source Tablespace Name to cancel the run")],
         dest_tablespace: Annotated[str, typer.Option(help="Destination tablespace Name to cancel the run")],
+        index_tablespace: Annotated[str, typer.Option(help="Index tablespace tablespace Name to cancel the run")],
+        use_adc: Annotated[bool, typer.Option(help=" Uses Sampling method to  create dictionary by default - give --use-adc to use ADC for dictionary creation")],
         user_id: Annotated[str, typer.Option(help="User Id to connect to Db2 warehouse Instance")],
         password: Annotated[str, typer.Option(help="Password of the User ID")],
         hostname: Annotated[str, typer.Option(help="Hostname of the Db2 warehouse Instance")],
@@ -735,8 +742,12 @@ def cancel(
         print()
         console.print("Test Connect to the Db2 warehouse instance")
         if conn_test:
+            if use_adc is False:
+                copy_opts = "COPY_USE_OTA,COPY_USE_RID=0,NO_STATS,ALLOW_READ_ACCESS"
+            else:
+                copy_opts = "COPY_USE_OTA,USE_ADC,COPY_USE_RID=0,NO_STATS,ALLOW_READ_ACCESS"
             print("Canceling the table migration")
-            cancel_terminate_admin_move_table(user_id, password, hostname, port, database, schema_name, table_name, "TERM", src_tablespace, dest_tablespace,dsn)
-            cancel_terminate_admin_move_table(user_id, password, hostname, port, database, schema_name, table_name, "CANCEL", src_tablespace, dest_tablespace,dsn)
+            cancel_terminate_admin_move_table(user_id, password, hostname, port, database, schema_name, table_name, "TERM", src_tablespace, dest_tablespace,dsn,index_tablespace,copy_opts)
+            cancel_terminate_admin_move_table(user_id, password, hostname, port, database, schema_name, table_name, "CANCEL", src_tablespace, dest_tablespace,dsn,index_tablespace,copy_opts)
     except Exception as e:
         print(e)
