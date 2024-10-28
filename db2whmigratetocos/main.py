@@ -352,7 +352,7 @@ def move(
         log_directory_path: Annotated[str, typer.Option(
             help="Pass the log directory base path")] = None,
         index_tbspace: Annotated[str, typer.Option(
-            help="Index tablespace, where the index can be placed")] = "tablespace", 
+            help="Index tablespace, where the index can be placed")] = "USERSPACE1", 
         scope: Annotated[str, typer.Option(
             help="Move tables by tablespace/schema")] = "tablespace",
         schema_name: Annotated[str, typer.Option(
@@ -740,7 +740,3 @@ def cancel(
             cancel_terminate_admin_move_table(user_id, password, hostname, port, database, schema_name, table_name, "CANCEL", src_tablespace, dest_tablespace,dsn)
     except Exception as e:
         print(e)
-
-
-
-
