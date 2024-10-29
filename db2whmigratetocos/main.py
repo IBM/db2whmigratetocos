@@ -642,6 +642,7 @@ def status(
      db2whmigratetocos status\n
      --scope migration-runs/tables\n
      --active-runs\n
+     --log-directory-path <path>
      --user-id <user-id> --password <password> --hostname <host-name>
 
     '''
