@@ -286,7 +286,19 @@ def adm_move_table_phase(user: str, password: str, hostname: str, port: str, dat
             return "INPROGRESS"
         else:
             print(e)
-            return "ERROR"
+            logger.info(e)
+            logger.error("Error: %s", e)
+            log_for_the_phase = {
+                "STATUS": "ERROR",
+                "ERROR_CODE": str(e),
+            }
+            with open(report_file_name, 'r+', encoding='utf-8') as file:
+                file_data = json.load(file)
+                file_data["phase_logs"].append(log_for_the_phase)
+                file_data["status"] = "ERROR"
+                file.seek(0)
+                json.dump(file_data, file, indent=6)
+            return "COMPLETE"
 
         # if ADM_MOVE_TABLE_CLEANUP_ERROR_STATE in y:
         #          status = find_adm_status_for_a_table(user,password,hostname,port,database,tablename,schemaname,src_tbspace,dest_tbspace)
@@ -426,23 +438,28 @@ def adm_move_table_ops_db2woc(user: str, password: str, hostname: str, port: str
                 break
         if status == "INPROGRESS":
             print()
+            if "USE_ADC" in copy_opts:
+              adc="--use-adc"
+            else:
+             adc = "--no-use-adc"
             print("The migration for the table is already in progress")
             print("Run the following command to cancel the exisitng run")
-            print('''db2whmigratetocos cancel --schema-name {SCHEMANAME} --table-name {TABLENAME} --src-tablespace {SRC_TABLESPACE} --dest-tablespace {DEST_TABLESPACE} --user-id {USER}  --password '{PASSWORD}'  --hostname {HOSTNAME} --index-tbspace {INDEX_TABSPACE} --no-use-adc'''.
-                  format(SCHEMANAME = schemaname,TABLENAME=tablename,SRC_TABLESPACE=src_tbspace,DEST_TABLESPACE=dest_tbspace,USER=user,PASSWORD=password,HOSTNAME=hostname,INDEX_TABSPACE=index_tbspace))
-            print("Initiating the move for the next table")
+            print('''db2whmigratetocos cancel --schema-name {SCHEMANAME} --table-name {TABLENAME} --src-tablespace {SRC_TABLESPACE} --dest-tablespace {DEST_TABLESPACE} --user-id {USER}  --password '{PASSWORD}'  --hostname {HOSTNAME} --index-tbspace {INDEX_TABSPACE} {ADC} --log-file-name {LOG_FILE}  --report-file-name {REPORT_FILE}'''.
+                  format(SCHEMANAME = schemaname,TABLENAME=tablename,SRC_TABLESPACE=src_tbspace,DEST_TABLESPACE=dest_tbspace,USER=user,PASSWORD=password,HOSTNAME=hostname,INDEX_TABSPACE=index_tbspace,LOG_FILE=log_file_name,REPORT_FILE=report_file_name,ADC=adc))
+            print("Initiating the move for the next table to move if present ")
             print()
             logger.removeHandler(log_file_handler)
             break
         if status == None or status == "None" or status == "NONE":
             logger.removeHandler(log_file_handler)
-            print("Initiating the move for the next table")
+            print("Initiating the move for the next table to move if present ")
             break
-        if status =="ERROR":
+        if status == "ERROR":
             print("Please check the above error")
             logger.removeHandler(log_file_handler)
-            print("Initiating the move for the next table")
-            break    
+            print("Initiating the move for the next table to move if present ")
+            break   
+    logger.removeHandler(log_file_handler) 
    
 
 def get_the_rows_moved_in_admin_move_table(schemaname, tablename, user_id, password, hostname, port, database,dsn):

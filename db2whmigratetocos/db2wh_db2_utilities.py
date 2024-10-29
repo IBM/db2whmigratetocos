@@ -17,7 +17,7 @@ from rich.table import Table
 from rich.console import Console
 from db2whmigratetocos.admin_move_table_func import adm_move_table_ops_db2woc
 from db2whmigratetocos.constants import SCHEMA_CSV_COLUMNS, TABLESPACE_CSV_COLUMNS
-from db2whmigratetocos.queries import ADM_MOVE_TABLE_FIND_PHASE, GET_OBJECTSPACE_USING_SGNAME, GET_STORAGE_PATH_DEFINED_IN_INSTANCE, LIST_SCHEMAS, LIST_TABLES_IN_SCHEMA, LIST_TABLES_IN_TSPACE, LIST_TBSPACE_BY_TABNAME, LIST_TBSPACES, TAB_SIZE, GET_THE_ROW_COUNT, ADM_MOVE_TABLE_FIND_TARGET_TABLE
+from db2whmigratetocos.queries import ADM_MOVE_TABLE_FIND_PHASE, GET_OBJECTSPACE_USING_SGNAME, GET_STORAGE_PATH_DEFINED_IN_INSTANCE, GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY, LIST_SCHEMAS, LIST_TABLES_IN_SCHEMA, LIST_TABLES_IN_TSPACE, LIST_TBSPACE_BY_TABNAME, LIST_TBSPACES, TAB_SIZE, GET_THE_ROW_COUNT, ADM_MOVE_TABLE_FIND_TARGET_TABLE
 
 
 console = Console()
@@ -699,16 +699,17 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
                     details['table_name'], user_id, password, hostname, port, database,dsn)
                 target_rows = get_the_rows_moved_in_admin_move_table(
                     details['schema_name'], target_table_name, user_id, password, hostname, port, database,dsn)
-                original_rows = get_the_rows_moved_in_admin_move_table(
+                original_rows = get_the_rows_moved_in_admin_move_table_using_count( details['schema_name'], details['table_name'], user_id, password, hostname, port, database,dsn)
+                if original_rows == 0 or original_rows is None:
+                    original_rows = get_the_rows_moved_in_admin_move_table(
                     details['schema_name'], details['table_name'], user_id, password, hostname, port, database,dsn)
-                print(target_rows)
-                print(original_rows)
                 if target_rows is not None and original_rows is not None and int(original_rows) != 0:
-                  print(target_rows)
-                  print(original_rows)
-                  progress = math.ceil((100 - ((int(original_rows) - int(target_rows))/int(original_rows)) * 100))
+                  if target_rows <=original_rows:
+                    progress = str(math.ceil((100 - ((int(original_rows) - int(target_rows))/int(original_rows)) * 100))) + " %"
+                  else:
+                    progress = "TABLE_WRITE - Target "+ str(target_rows)
                 tb_table.add_row(str(details['batch_id']), str(details['migration_job_id']), str(details['table_name']), details['schema_name'],
-                                 phase_status, details['source_tablespace'], details['destination_tablespace'], str(progress) +" %")
+                                 phase_status, details['source_tablespace'], details['destination_tablespace'], str(progress))
         else:
             if phase_status == 'COMPLETE':
                 tb_table.add_row(str(details['batch_id']), str(details['migration_job_id']), str(
@@ -924,6 +925,30 @@ def get_the_rows_moved_in_admin_move_table(schemaname, tablename, user_id, passw
     for item in rows:
         return item[0]
 
+def get_the_rows_moved_in_admin_move_table_using_count(schemaname, tablename, user_id, password, hostname, port, database,dsn):
+    """_summary_
+
+    Args:
+        schemaname (_type_): _description_
+        tablename (_type_): _description_
+        user_id (_type_): _description_
+        password (_type_): _description_
+        hostname (_type_): _description_
+        port (_type_): _description_
+        database (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    cnxn = db2wh_pyodbc_connection(
+        user_id, password, hostname, port, database, False,dsn)
+    conn = cnxn.cursor()
+    conn.execute(GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY.format(
+        TABLENAME=tablename, SCHEMANAME=schemaname))
+    rows = conn.fetchall()
+    cnxn.close()
+    for item in rows:
+        return item[0]
 
 def get_list_of_objectspaces(user_id, password, hostname, port, database,dsn:str):
     """

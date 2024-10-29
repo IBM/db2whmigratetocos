@@ -407,7 +407,7 @@ def move(
             user_id, password, hostname, port, database, True,valid_dsn)
         log_directory_base_path = " "
         if log_directory_path is not None:
-            log_directory_base_path = log_directory_path+"/db2whmigratetocos-logs/"
+            log_directory_base_path = log_directory_path+"/db2whmigratetocos-logs"
             is_exist = os.path.exists(log_directory_base_path)
             if is_exist is not True:
                 os.makedirs(log_directory_base_path, exist_ok=True)
@@ -422,9 +422,9 @@ def move(
             sys.exit(0)
         if conn_test:
             if use_adc is False:
-                copy_opts = "COPY_USE_OTA,COPY_USE_RID=0,NO_STATS"
+                copy_opts = "COPY_USE_OTA,NO_STATS"
             else:
-                copy_opts = "COPY_USE_OTA,USE_ADC,COPY_USE_RID=0,NO_STATS"
+                copy_opts = "COPY_USE_OTA,USE_ADC,NO_STATS"
             if list is None and csv_input is None and scope!="table":
                 print("The list provided is empty. Kindly give all or a list of tablespaces/schemas")
                 sys.exit(0)
@@ -716,38 +716,49 @@ def cancel(
         table_name: Annotated[str, typer.Option(help="Table Name to cancel the run")],
         src_tablespace: Annotated[str, typer.Option(help="Source Tablespace Name to cancel the run")],
         dest_tablespace: Annotated[str, typer.Option(help="Destination tablespace Name to cancel the run")],
-        index_tablespace: Annotated[str, typer.Option(help="Index tablespace tablespace Name to cancel the run")],
+        index_tbspace: Annotated[str, typer.Option(help="Index tablespace tablespace Name to cancel the run")],
         use_adc: Annotated[bool, typer.Option(help=" Uses Sampling method to  create dictionary by default - give --use-adc to use ADC for dictionary creation")],
         user_id: Annotated[str, typer.Option(help="User Id to connect to Db2 warehouse Instance")],
         password: Annotated[str, typer.Option(help="Password of the User ID")],
         hostname: Annotated[str, typer.Option(help="Hostname of the Db2 warehouse Instance")],
+        log_file_name: Annotated[str, typer.Option(
+            help="The log file name to remove the log file ")] = None,
+        report_file_name: Annotated[str, typer.Option(
+            help="The report file name to remove the JSON file")] = None,
         dsn: Annotated[str, typer.Option(
-            help="Pass the DSN name if it is already configured")] = " ",
+            help="Pass the DSN name if it is already configured")] = None,
         database: Annotated[str, typer.Option(
             help="Database to be connected")] = "BLUDB",
         port: Annotated[str, typer.Option(help="Port to be used for Db2 warehouse Instance")] = "50001"):
 
     """
-    To cancel a run for the table
+    To cancel a run for the table migration run 
     """
     try:
         valid_dsn = ""
-        if dsn!="":
+        if dsn != None:
          valid_dsn = dsn
          conn_test = db2wh_pyodbc_connection(
             user_id, password, hostname, port, database, True,valid_dsn)
         else:
+         valid_dsn = None
          conn_test = db2wh_pyodbc_connection(
             user_id, password, hostname, port, database, True,valid_dsn)
         print()
         console.print("Test Connect to the Db2 warehouse instance")
         if conn_test:
+            if  os.path.exists(log_file_name):
+                print("Removing the LOG File")
+                os.remove(log_file_name)
+            if  os.path.exists(report_file_name):
+                print("Removing the JSON File")
+                os.remove(report_file_name)
             if use_adc is False:
-                copy_opts = "COPY_USE_OTA,COPY_USE_RID=0,NO_STATS,ALLOW_READ_ACCESS"
+                copy_opts = "COPY_USE_OTA,NO_STATS"
             else:
-                copy_opts = "COPY_USE_OTA,USE_ADC,COPY_USE_RID=0,NO_STATS,ALLOW_READ_ACCESS"
-            print("Canceling the table migration")
-            cancel_terminate_admin_move_table(user_id, password, hostname, port, database, schema_name, table_name, "TERM", src_tablespace, dest_tablespace,dsn,index_tablespace,copy_opts)
-            cancel_terminate_admin_move_table(user_id, password, hostname, port, database, schema_name, table_name, "CANCEL", src_tablespace, dest_tablespace,dsn,index_tablespace,copy_opts)
+                copy_opts = "COPY_USE_OTA,USE_ADC,NO_STATS"
+            print("Cancelling the table migration")
+            cancel_terminate_admin_move_table(user_id, password, hostname, port, database, schema_name, table_name, "TERM", src_tablespace, dest_tablespace,dsn,index_tbspace,copy_opts)
+            cancel_terminate_admin_move_table(user_id, password, hostname, port, database, schema_name, table_name, "CANCEL", src_tablespace, dest_tablespace,dsn,index_tbspace,copy_opts)
     except Exception as e:
         print(e)
