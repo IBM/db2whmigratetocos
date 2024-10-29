@@ -3,11 +3,10 @@ build/
 db2whmigratetocos.egg-info/
 .DS_Store
 test.py
-whl_build.sh
+.whl_build.sh
 *.pyc
 /.vscode
 .venv/
 venv/
 
-whl_build.sh
-whl_build.sh
+

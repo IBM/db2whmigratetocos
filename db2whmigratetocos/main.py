@@ -78,8 +78,9 @@ def list(
     \n
     -- scope -  tablespace/schema by which the tables needs to listed\n
     -- list  -  all/list of tablespaces/list of schema - the tables under the specified list will be listed\n
-    -- detail / --no-detail - it prints the information regarding the table size, table schema \n
+    -- detail / --no-detail - it prints the information regarding the table size, tablename and  schema \n
     -- export / --no-export - it exports the printed list to a CSV that can used for the MOVE command\n
+    --dsn -  Pass the DSN name if it is already configured
     \n
     Command:
     \n
@@ -345,19 +346,19 @@ def move(
         hostname: Annotated[str, typer.Option(help="Hostname of the Db2 warehouse Instance")],
         list: Annotated[str, typer.Option(
             help="Source tablespace/schema in block storage - all/comma seperated list of tablespace/schema")] = None,
-        use_adc: Annotated[bool, typer.Option(help=" Uses Sampling method to  create dictionary by default - give --use-adc to use ADC for dictionary creation")] = False,
+        use_adc: Annotated[bool, typer.Option(help="Uses Sampling method to  create dictionary by default - give --use-adc to use ADC for dictionary creation")] = False,
         csv_input: Annotated[str, typer.Option(
             help="CSV file as input to the move command as .csv file without the path")] = None,
         dsn: Annotated[str, typer.Option(
             help="Pass the DSN name configured in ODBC Driver Config File (odbcinst.ini)")] = None,
         log_directory_path: Annotated[str, typer.Option(
-            help="Pass the log directory base path")] = None,
+            help="Pass the log directory base path to store the log files")] = None,
         index_tbspace: Annotated[str, typer.Option(
             help="Index tablespace, where the index can be placed")] = "USERSPACE1", 
         scope: Annotated[str, typer.Option(
             help="Move tables by tablespace/schema")] = "tablespace",
         schema_name: Annotated[str, typer.Option(
-            help="Move tables by tablespace/schema")] = None,
+            help="Provide the schema name when moving a single table")] = None,
         table_name: Annotated[str, typer.Option(
             help="Move tables by tablespace/schema")] = None,
         dest_tbspace: Annotated[str, typer.Option(
@@ -382,17 +383,21 @@ def move(
     --scope - tablespace/schema - move tables by tablespace/schema\n
     --list - all/list of tablespaces/list of schema - the tables under the specified list will be listed\n
     --dest_tablespace - OBJSTORESPACE1 - The destination tablespace in COS\n
-    --skip_schema  - Skip a list of schema in the list - only used when the scope is schema\n
-    --skip_tbspace - Skip a list of tablespaces in the list - only used when the scope is tablespace\n
-    --csv_input - Give the generated CSV as input for the move command
+    --skip-schema  - Skip a list of schema in the list - only used when the scope is schema\n
+    --skip-tbspace - Skip a list of tablespaces in the list - only used when the scope is tablespace\n
+    --csv-input - Give the generated CSV as input for the move command
+    --index-tbspace - The tablespace in block where the indexes are stored
+    --dsn -  The DSN name if it is already configured
+    --use-adc - Uses Sampling method to  create dictionary by default - give --use-adc to use ADC for dictionary creation
+    --log-directory-path -  Pass the log directory base path to store the log files
     \n
     Command:
     \n
-    db2whmigratetocos move \n
-    --scope <schema> --list <list of objects>\n
-    --skip-schema none --dest-tbspace OBJSTORESPACE1\n
-    --user-id <user-id> --password <password> --hostname <host-name>\n
-
+    db2whmigratetocos move  --scope tablespace --list  DB_TS1\n 
+    --dest-tbspace OBJSTORESPACE1 --index-tbspace USERSPACE1 \n
+    --log-directory-path <path> --user-id  <user_id> --password <password>\n 
+    --hostname <>hostnamE> --use-adc\n
+     
     """
     try:
         valid_dsn = " "
@@ -634,8 +639,9 @@ def status(
     It can give the details and the status of a migration runs
 
     command:
-     db2whmigratetocos status
-     --scope migration-runs/tables
+     db2whmigratetocos status\n
+     --scope migration-runs/tables\n
+     --active-runs\n
      --user-id <user-id> --password <password> --hostname <host-name>
 
     '''
