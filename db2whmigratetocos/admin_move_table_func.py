@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 ADM_MOVE_TABLE_CMD_DB2WOC = "CALL SYSPROC.ADMIN_MOVE_TABLE('{SCHEMANAME}','{TABLENAME}','{DEST_TBSPACE}','{INDEX_TBSPACE}','{DEST_TBSPACE}','','','','','{COPY_OPTS}','{OPTION}')"
 ADM_MOVE_TABLE_PHASE_ERROR_STATE = "SQL2104N"
 ADM_MOVE_TABLE_CLEANUP_ERROR_STATE = "SQL2105N"
-ADM_MOVE_TABLE_FIND_PHASE = "SELECT VALUE FROM SYSTOOLS.ADMIN_MOVE_TABLE WHERE KEY='STATUS' AND TABNAME='{TABLENAME}'"
-ADM_MOVE_TABLE_STRUCK_PHASE = "SELECT TABNAME FROM SYSTOOLS.ADMIN_MOVE_TABLE WHERE KEY='TARGET' AND VALUE='{TABLENAME}'"
+ADM_MOVE_TABLE_FIND_PHASE = "SELECT VALUE FROM SYSTOOLS.ADMIN_MOVE_TABLE WHERE KEY='STATUS' AND TABNAME='{TABLENAME}' AND TABSCHEMA='{SCHEMANAME}' WITH UR"
+ADM_MOVE_TABLE_STRUCK_PHASE = "SELECT TABNAME FROM SYSTOOLS.ADMIN_MOVE_TABLE WHERE KEY='TARGET' AND VALUE='{TABLENAME}' AND TABNAME='{TABLENAME}' AND TABSCHEMA='{SCHEMANAME}' WITH UR'"
 
 
 def check_home_path():
@@ -175,7 +175,7 @@ def find_adm_status_to_retry(user: str, password: str, hostname: str, port: str,
             user, password, hostname, port, database,dsn)
         cnxn = pyodbc.connect(connection_string+"LONGDATACOMPAT=1;")
         conn = cnxn.cursor()
-        conn.execute(ADM_MOVE_TABLE_FIND_PHASE.format(TABLENAME=tablename))
+        conn.execute(ADM_MOVE_TABLE_FIND_PHASE.format(TABLENAME=tablename,SCHEMANAME=schemaname))
         rows = conn.fetchall()
         for item in rows:
                 table_phase = item[0]
@@ -263,6 +263,8 @@ def adm_move_table_phase(user: str, password: str, hostname: str, port: str, dat
             return status
         else:
             status = find_adm_status_to_retry(user, password, hostname, port, database,tablename,schemaname,src_tbspace,dest_tbspace,report_file_name,dsn)
+            print("status if none")
+            print(status)
             if status is not None:
               return status
             else:
@@ -419,20 +421,23 @@ def adm_move_table_ops_db2woc(user: str, password: str, hostname: str, port: str
             status = adm_move_table_phase(
                 user, password, hostname, port, database, schemaname, tablename, "COPY", src_tbspace, dest_tbspace, report_file_name,dsn,index_tbspace,copy_opts)
             status = find_adm_status_to_retry(user, password, hostname, port, database,tablename,schemaname,src_tbspace,dest_tbspace,report_file_name,dsn)
-
         if status == "REPLAY":
             logger.info("REPLAY Phase for {TABLENAME}".format(
                 TABLENAME=tablename))
             status = adm_move_table_phase(
                 user, password, hostname, port, database, schemaname, tablename, "REPLAY", src_tbspace, dest_tbspace, report_file_name,dsn,index_tbspace,copy_opts)
-
             logger.info("SWAP Phase for {TABLENAME}".format(
                 TABLENAME=tablename))
             status = adm_move_table_phase(
                 user, password, hostname, port, database, schemaname, tablename, "SWAP", src_tbspace, dest_tbspace, report_file_name,dsn,index_tbspace,copy_opts)
             status = find_adm_status_to_retry(user, password, hostname, port, database,tablename,schemaname,src_tbspace,dest_tbspace,report_file_name,dsn)
             if status == "COMPLETE":
-                logger.info("Movement COMPLETE for {TABLENAME} in".format(
+                logger.info("Movement COMPLETE for {TABLENAME}".format(
+                    TABLENAME=tablename))
+                logger.removeHandler(log_file_handler)
+                break
+            else:
+                logger.info("Error in SWAP Phase for  {TABLENAME}".format(
                     TABLENAME=tablename))
                 logger.removeHandler(log_file_handler)
                 break

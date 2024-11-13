@@ -15,8 +15,8 @@ from rich.table import Table
 import pandas as pd
 import typer
 from db2whmigratetocos.admin_move_table_func import cancel_terminate_admin_move_table
-from db2whmigratetocos.constants import STATUS_TABLE_HEADER, STATUS_TABLE_HEADER_ACTIVE_RUNS
-from db2whmigratetocos.db2wh_db2_utilities import check_home_path, check_if_logs_path_exist_else_create, create_a_log_directory_for_a_batch, db2wh_pyodbc_connection, export_the_data_as_csv, get_list_of_objectspaces, get_schema_in_instance, get_tables_cnt_under_tablespaces, get_tables_under_schem_notabsize_in_db2woc, get_tables_under_schema_in_db2woc, get_tables_under_tablespace_in_db2woc, get_tables_under_tablespace_no_tabsize_in_db2woc, get_tablespaces_in_block_and_cos, get_tabname_schemaname_under_tablespace_in_db2woc, get_tbpsace_name_for_table, list_migration_runs, move_the_tables, parse_the_json_files_for_status, print_export_tables_in_block_and_cos, print_table_row, validate_and_get_df_from_the_csv, validate_the_input_db2_objects
+from db2whmigratetocos.constants import COPY_OPTIONS, STATUS_TABLE_HEADER, STATUS_TABLE_HEADER_ACTIVE_RUNS
+from db2whmigratetocos.db2wh_db2_utilities import check_for_user_created_indexes, check_home_path, check_if_logs_path_exist_else_create, create_a_log_directory_for_a_batch, db2wh_pyodbc_connection, export_the_data_as_csv, get_list_of_objectspaces, get_schema_in_instance, get_tables_cnt_under_tablespaces, get_tables_under_schem_notabsize_in_db2woc, get_tables_under_schema_in_db2woc, get_tables_under_tablespace_in_db2woc, get_tables_under_tablespace_no_tabsize_in_db2woc, get_tablespaces_in_block_and_cos, get_tabname_schemaname_under_tablespace_in_db2woc, get_tbpsace_name_for_table, list_migration_runs, move_the_tables, parse_the_json_files_for_status, print_export_tables_in_block_and_cos, print_table_row, validate_and_get_df_from_the_csv, validate_the_input_db2_objects
 from .db2whmigratetocos_install_prereq import db2whmigratetocos_init
 
 app = typer.Typer()
@@ -87,7 +87,7 @@ def list(
     db2whmigratetocos list  \n
       --scope  schema/tablespace  --list  all  \n
       --user-id user_id  --password password  --hostname  test.db2w.cloud.ibm.com \n
-      --export-csv --detail \n
+      --export-csv --detail --dsn \n
 
     """
     try:
@@ -346,15 +346,12 @@ def move(
         hostname: Annotated[str, typer.Option(help="Hostname of the Db2 warehouse Instance")],
         list: Annotated[str, typer.Option(
             help="Source tablespace/schema in block storage - all/comma seperated list of tablespace/schema")] = None,
-        use_adc: Annotated[bool, typer.Option(help="Uses Sampling method to  create dictionary by default - give --use-adc to use ADC for dictionary creation")] = False,
         csv_input: Annotated[str, typer.Option(
             help="CSV file as input to the move command as .csv file without the path")] = None,
         dsn: Annotated[str, typer.Option(
             help="Pass the DSN name configured in ODBC Driver Config File (odbcinst.ini)")] = None,
         log_directory_path: Annotated[str, typer.Option(
             help="Pass the log directory base path to store the log files")] = None,
-        index_tbspace: Annotated[str, typer.Option(
-            help="Index tablespace, where the index can be placed")] = "USERSPACE1", 
         scope: Annotated[str, typer.Option(
             help="Move tables by tablespace/schema")] = "tablespace",
         schema_name: Annotated[str, typer.Option(
@@ -363,6 +360,8 @@ def move(
             help="Move tables by tablespace/schema")] = None,
         dest_tbspace: Annotated[str, typer.Option(
             help="Destination tablespace in cos, where the data needs to be moved ")] = "OBJSTORESPACE1",
+        copy_opts: Annotated[str, typer.Option(
+            help="Destination tablespace in cos, where the data needs to be moved ")] = "COPY_USE_OTA,NO_STATS",
         user_id: Annotated[str, typer.Option(
             help="User Id to connect to Db2 warehouse Instance")] = "db2inst1",
         skip_schema: Annotated[str, typer.Option(
@@ -372,6 +371,7 @@ def move(
         database: Annotated[str, typer.Option(
             help="Database to be connected")] = "BLUDB",
         port: Annotated[str, typer.Option(help="Port to be used for Db2 warehouse Instance")] = "50001"):
+        
     """
     Move the tablespaces to COS from Block
     \n
@@ -422,15 +422,18 @@ def move(
         print()
         console.print("Test Connect to the Db2 warehouse instance")
         object_space_list = get_list_of_objectspaces(user_id,password,hostname,port,database,valid_dsn)
-        if index_tbspace in object_space_list:
-            print('The index tablespace cannot be a remote tablespace')
-            sys.exit(0)
         if conn_test:
-            if use_adc is False:
-                copy_opts = "COPY_USE_OTA,NO_STATS"
-            else:
-                copy_opts = "COPY_USE_OTA,USE_ADC,NO_STATS"
-            if list is None and csv_input is None and scope!="table":
+            valid_copy_opts = True
+            if copy_opts is not None:
+                user_copy_options = copy_opts.split(",")
+                for user_copy_option in user_copy_options:
+                    if user_copy_option not in COPY_OPTIONS:
+                        valid_copy_opts = False
+                        print("The provided copy option is not valid - " + user_copy_option)
+                        sys.exit(0)
+            if valid_copy_opts is True:
+                print("The copy options are  valid - " + copy_opts)
+            if list is None and csv_input is None and scope != "table":
                 print("The list provided is empty. Kindly give all or a list of tablespaces/schemas")
                 sys.exit(0)
             if list is not None:
@@ -479,6 +482,11 @@ def move(
                                         if table_exists:
                                             selected_dest_tbspace = idx % len(
                                                 dest_tbspace_list)
+                                            index = check_for_user_created_indexes(user_id,password,hostname,port,database,row['tablename'],row['schema'],valid_dsn)
+                                            if index is True:
+                                                index_tbspace = "USERSPACE1"
+                                            else:
+                                                index_tbspace = dest_tbspace_list[selected_dest_tbspace]
                                             move_the_tables(row['schema'], row['tablename'], row['tablespace'], dest_tbspace_list[selected_dest_tbspace],
                                                             log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace)
                                         else:
@@ -516,6 +524,11 @@ def move(
                                         for idx, items in enumerate(tables_in_userspace):
                                             selected_dest_tbspace = idx % len(
                                                 dest_tbspace_list)
+                                            index = check_for_user_created_indexes(user_id,password,hostname,port,database,items[0],items[1],valid_dsn)
+                                            if index is True:
+                                                index_tbspace = "USERSPACE1"
+                                            else:
+                                                index_tbspace = dest_tbspace_list[selected_dest_tbspace]
                                             move_the_tables(items[1], items[0], tbspace, dest_tbspace_list[selected_dest_tbspace],
                                                             log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,copy_opts)
                                     if len(tables_in_userspace) == 0:
@@ -549,9 +562,13 @@ def move(
                                         if table_exists:
                                             selected_dest_tbspace = idx % len(dest_tbspace_list)
                                             if source_tablespace not in dest_tbspace_list:
+                                                index = check_for_user_created_indexes(user_id,password,hostname,port,database,row['tablename'],row['schema'],valid_dsn)
+                                                if index is True:
+                                                    index_tbspace = "USERSPACE1"
+                                                else:
+                                                     index_tbspace = dest_tbspace_list[selected_dest_tbspace]
                                                 move_the_tables(row['schema'], row['tablename'], source_tablespace, dest_tbspace_list[selected_dest_tbspace],
                                                                 log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,copy_opts)
-                                                print("here")
                                             else:
                                                 print(
                                                     "The source and the destination are same")
@@ -589,6 +606,11 @@ def move(
                                             selected_dest_tbspace = idx % len(dest_tbspace_list)
                                             source_tablespace = get_tbpsace_name_for_table(
                                                 user_id, password, hostname, port, database, item[0], schema,valid_dsn)
+                                            index = check_for_user_created_indexes(user_id,password,hostname,port,database,item[0],schema,valid_dsn)
+                                            if index is True:
+                                                index_tbspace = "USERSPACE1" 
+                                            else:
+                                                index_tbspace = dest_tbspace_list[selected_dest_tbspace]
                                             if source_tablespace not in dest_tbspace_list:
                                                 move_the_tables(
                                                     schema, item[0], source_tablespace, dest_tbspace_list[selected_dest_tbspace], log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,copy_opts)
@@ -605,6 +627,11 @@ def move(
                     if table_name is not None:
                         log_directory_name = create_a_log_directory_for_a_batch(log_directory_base_path)
                         source_tablespace = get_tbpsace_name_for_table(user_id, password, hostname, port, database,table_name, schema_name,valid_dsn)
+                        index = check_for_user_created_indexes(user_id,password,hostname,port,database,table_name,schema_name,valid_dsn)
+                        if index is True:
+                            index_tbspace = "USERSPACE1"
+                        else:
+                            index_tbspace = dest_tbspace_list[0]
                         if source_tablespace not in dest_tbspace_list:
                              move_the_tables(schema_name,table_name, source_tablespace, dest_tbspace_list[0], log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,copy_opts)
                     else:

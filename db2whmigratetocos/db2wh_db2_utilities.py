@@ -17,7 +17,7 @@ from rich.table import Table
 from rich.console import Console
 from db2whmigratetocos.admin_move_table_func import adm_move_table_ops_db2woc
 from db2whmigratetocos.constants import SCHEMA_CSV_COLUMNS, TABLESPACE_CSV_COLUMNS
-from db2whmigratetocos.queries import ADM_MOVE_TABLE_FIND_PHASE, GET_OBJECTSPACE_USING_SGNAME, GET_STORAGE_PATH_DEFINED_IN_INSTANCE, GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY, LIST_SCHEMAS, LIST_TABLES_IN_SCHEMA, LIST_TABLES_IN_TSPACE, LIST_TBSPACE_BY_TABNAME, LIST_TBSPACES, TAB_SIZE, GET_THE_ROW_COUNT, ADM_MOVE_TABLE_FIND_TARGET_TABLE
+from db2whmigratetocos.queries import ADM_MOVE_TABLE_FIND_PHASE, GET_OBJECTSPACE_USING_SGNAME, GET_STORAGE_PATH_DEFINED_IN_INSTANCE, GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY, GET_USER_CREATED_INDEX, LIST_SCHEMAS, LIST_TABLES_IN_SCHEMA, LIST_TABLES_IN_TSPACE, LIST_TBSPACE_BY_TABNAME, LIST_TBSPACES, TAB_SIZE, GET_THE_ROW_COUNT, ADM_MOVE_TABLE_FIND_TARGET_TABLE
 
 
 console = Console()
@@ -107,7 +107,7 @@ def get_schema_in_instance(user: str, password: str, hostname: str, port: str, d
         rows = conn.fetchall()
         cnxn.close()
         for item in rows:
-            if "SYS" not in item[0] and "NULL" not in item[0] and "TS4" not in item[0] and "SQL" not in item[0] and "IBMPDQ" not in item[0] and "DEFAULT" not in item[0]:
+            if "SYS" not in item[0] and "NULL" not in item[0] and "TS4" not in item[0] and "SQL" not in item[0] and "IBMPDQ" not in item[0] and "DEFAULT" not in item[0] and  "IBM_RTMON" not in item[0] and "IBMCONSOLE" not in item[0]:
                 user_schemas_list.append(item[0].strip())
         return user_schemas_list
     except Exception as e:
@@ -694,7 +694,7 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
         else:
             phase_status = details['status'] 
         if active is True:
-            if phase_status != "COMPLETE" and "REQUESTED TO" not in phase_status:
+            if phase_status != "COMPLETE" and "REQUESTED TO" not in phase_status and  "ERROR" not in phase_status:
                 target_table_name = get_the_original_tablename_from_admin_move_table(
                     details['table_name'], user_id, password, hostname, port, database,dsn)
                 target_rows = get_the_rows_moved_in_admin_move_table(
@@ -971,5 +971,27 @@ def get_list_of_objectspaces(user_id, password, hostname, port, database,dsn:str
                     object_space_list.append(item[0])
                 cnxn.close()
                 return object_space_list     
+    except Exception as e:
+        print(e)
+
+
+def check_for_user_created_indexes(user_id, password, hostname, port, database,tablename,schemaname,dsn:str):
+    import pyodbc
+    try:
+        connection_string = get_connection_string(
+            user_id, password, hostname, port, database,dsn)
+        cnxn = pyodbc.connect(connection_string+"LONGDATACOMPAT=1;")
+        conn = cnxn.cursor()
+        conn.execute(GET_USER_CREATED_INDEX.format(TABLENAME=tablename,SCHEMANAME=schemaname))
+        rows = conn.fetchall()
+        index = False
+        if len(rows) > 0:
+           for item in rows:
+               if "SYSIBM" not in item[1] and item[2] != 0:
+                   index= True
+        if index:
+           return True
+        else:
+           return False
     except Exception as e:
         print(e)
