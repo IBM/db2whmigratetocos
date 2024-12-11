@@ -137,7 +137,6 @@ def list(
                                 "Displaying till 75 tables for each tablespace")
                             print()
                             tables_list_in_tablespaces = []
-                            print(object_space_list)
                             for tbspace in tablespace_list:
                                 tbspace_store = " "
                                 if len(object_space_list) != 0:
@@ -587,7 +586,6 @@ def move(
                         if list is not None:
                             all_schemas = 'all' if 'all' in src_db2_obj_list else None
                              # validation of schema and setting the list for movment
-                            print(valid_schema_list)
                             if all_schemas == 'all':
                                 schema_list = valid_schema_list
                             else:

@@ -139,11 +139,12 @@ def get_tables_under_schema_in_db2woc(user: str, password: str, hostname: str, p
         cnxn.close()
         table_cnt = len(rows)
         for item in rows:
-            est_size = " "
-            est_size = tab_size_by_table_name(
-                user, password, hostname, port, database, schemaname, item[0],dsn)
-            total_estimate_size += int(est_size)
-            tables_in_schema.append([item[0], est_size])
+            if str(item[0]).endswith('t') is False: 
+                est_size = " "
+                est_size = tab_size_by_table_name(
+                    user, password, hostname, port, database, schemaname, item[0],dsn)
+                total_estimate_size += int(est_size)
+                tables_in_schema.append([item[0], est_size])
         return table_cnt, total_estimate_size, tables_in_schema
     except Exception as e:
         print(e)
@@ -987,7 +988,7 @@ def check_for_user_created_indexes(user_id, password, hostname, port, database,t
         index = False
         if len(rows) > 0:
            for item in rows:
-               if "SYSIBM" not in item[1] and item[2] != 0:
+               if ("SYS" not in item[1] or "IBM" not in item[1]) and "REG" in item[3]:
                    index= True
         if index:
            return True
