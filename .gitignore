@@ -1,4 +1,4 @@
-dist/
+
 build/
 db2whmigratetocos.egg-info/
 .DS_Store
