@@ -11,7 +11,7 @@ import json
 import subprocess
 import logging
 
-from db2whmigratetocos.queries import GET_THE_ROW_COUNT, GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY
+from db2whmigratetocos.queries import GET_THE_ROW_COUNT, GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY, RUNSTATS_FOR_TABLE
 
 
 logger = logging.getLogger(__name__)
@@ -390,7 +390,7 @@ def parse_adm_move_table_by_phase(rows: any, phase: str):
         return swap_phase_details
 
 
-def adm_move_table_ops_db2woc(user: str, password: str, hostname: str, port: str, database: str, schemaname: str, tablename: str, status: str, src_tbspace: str, dest_tbspace: str, report_file_name: str, log_file_name: str,dsn:str,index_tbspace:str,copy_opts:str):
+def adm_move_table_ops_db2woc(user: str, password: str, hostname: str, port: str, database: str, schemaname: str, tablename: str, status: str, src_tbspace: str, dest_tbspace: str, report_file_name: str, log_file_name: str,dsn:str,index_tbspace:str,copy_opts:str,runstats:bool):
     """_summary_
 
     Args:
@@ -432,8 +432,11 @@ def adm_move_table_ops_db2woc(user: str, password: str, hostname: str, port: str
                 user, password, hostname, port, database, schemaname, tablename, "SWAP", src_tbspace, dest_tbspace, report_file_name,dsn,index_tbspace,copy_opts)
             status = find_adm_status_to_retry(user, password, hostname, port, database,tablename,schemaname,src_tbspace,dest_tbspace,report_file_name,dsn)
             if status == "COMPLETE":
-                logger.info("Movement COMPLETE for {TABLENAME}".format(
-                    TABLENAME=tablename))
+                logger.info("Movement COMPLETE for {TABLENAME}".format(TABLENAME=tablename))
+                if runstats is True:
+                    logger.info("RUNSTATS for the table {TABLENAME} is triggered".format(TABLENAME=tablename)) 
+                    trigger_runstats_for_table(schemaname, tablename,user, password, hostname, port, database,dsn)
+                    logger.info("RUNSTATS for the table {TABLENAME} is completed ".format(TABLENAME=tablename)) 
                 logger.removeHandler(log_file_handler)
                 break
             else:
@@ -517,3 +520,27 @@ def get_the_rows_after_admin_move_table(schemaname, tablename, user_id, password
     cnxn.close()
     for item in rows:
         return item[0]
+
+def trigger_runstats_for_table(schemaname, tablename, user_id, password, hostname, port, database,dsn):
+    """_summary_
+
+    Args:
+        schemaname (_type_): _description_
+        tablename (_type_): _description_
+        user_id (_type_): _description_
+        password (_type_): _description_
+        hostname (_type_): _description_
+        port (_type_): _description_
+        database (_type_): _description_
+    Returns:
+        _type_: _description_
+    """
+    cnxn = db2wh_pyodbc_connection(
+        user_id, password, hostname, port, database,dsn)
+    conn = cnxn.cursor()
+    print("RUNSTATS for the {TABLENAME} is triggered".format(TABLENAME=tablename))
+    conn.execute(RUNSTATS_FOR_TABLE.format(
+        TABLENAME=tablename, SCHEMANAME=schemaname))
+    rows = conn.fetchall()
+    print("RUNSTATS for the {TABLENAME} is completed".format(TABLENAME=tablename))
+    cnxn.close()
