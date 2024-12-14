@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 """
+Copyright IBM Corp. 2024  All Rights Reserved.
+Licensed Materials - Property of IBM
 This is the setup file for the python wheel file build
 
 """

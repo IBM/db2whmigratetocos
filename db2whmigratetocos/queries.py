@@ -1,6 +1,6 @@
 """
 
-    Copyright IBM Corp. 2024-2025 All Rights Reserved.
+    Copyright IBM Corp. 2024  All Rights Reserved.
     Licensed Materials - Property of IBM
 
 """

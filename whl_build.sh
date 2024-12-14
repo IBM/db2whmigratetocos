@@ -1,3 +1,7 @@
+
+#Copyright IBM Corp. 2024  All Rights Reserved.
+#Licensed Materials - Property of IBM
+#shell scipt to build the wheel file
 !/bin/sh
 python3 -m build
 rm -rf db2whmigratetocos.egg-info
