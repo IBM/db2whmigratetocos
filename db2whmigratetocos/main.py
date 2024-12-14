@@ -355,6 +355,8 @@ def move(
             help="Move tables by tablespace/schema")] = "tablespace",
         schema_name: Annotated[str, typer.Option(
             help="Provide the schema name when moving a single table")] = None,
+        runstats: Annotated[bool, typer.Option(
+            help="Provide the schema name when moving a single table")] = False,
         table_name: Annotated[str, typer.Option(
             help="Move tables by tablespace/schema")] = None,
         dest_tbspace: Annotated[str, typer.Option(
@@ -487,7 +489,7 @@ def move(
                                             else:
                                                 index_tbspace = dest_tbspace_list[selected_dest_tbspace]
                                             move_the_tables(row['schema'], row['tablename'], row['tablespace'], dest_tbspace_list[selected_dest_tbspace],
-                                                            log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace)
+                                                            log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,runstats)
                                         else:
                                             print(
                                                 "Table not found in the tablespace")
@@ -529,7 +531,7 @@ def move(
                                             else:
                                                 index_tbspace = dest_tbspace_list[selected_dest_tbspace]
                                             move_the_tables(items[1], items[0], tbspace, dest_tbspace_list[selected_dest_tbspace],
-                                                            log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,copy_opts)
+                                                            log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,copy_opts,runstats)
                                     if len(tables_in_userspace) == 0:
                                         print("No tables found in the tablespace")
                                 else:
@@ -567,7 +569,7 @@ def move(
                                                 else:
                                                      index_tbspace = dest_tbspace_list[selected_dest_tbspace]
                                                 move_the_tables(row['schema'], row['tablename'], source_tablespace, dest_tbspace_list[selected_dest_tbspace],
-                                                                log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,copy_opts)
+                                                                log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,copy_opts,runstats)
                                             else:
                                                 print(
                                                     "The source and the destination are same")
@@ -611,7 +613,7 @@ def move(
                                                 index_tbspace = dest_tbspace_list[selected_dest_tbspace]
                                             if source_tablespace not in dest_tbspace_list:
                                                 move_the_tables(
-                                                    schema, item[0], source_tablespace, dest_tbspace_list[selected_dest_tbspace], log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,copy_opts)
+                                                    schema, item[0], source_tablespace, dest_tbspace_list[selected_dest_tbspace], log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,copy_opts,runstats)
                                     if len(tables_in_schema) == 0:
                                         print("No tables found in the schema")
                                 else:
@@ -631,7 +633,7 @@ def move(
                         else:
                             index_tbspace = dest_tbspace_list[0]
                         if source_tablespace not in dest_tbspace_list:
-                             move_the_tables(schema_name,table_name, source_tablespace, dest_tbspace_list[0], log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,copy_opts)
+                             move_the_tables(schema_name,table_name, source_tablespace, dest_tbspace_list[0], log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,copy_opts,runstats)
                     else:
                         print("The table name is not provided") 
                 else:
