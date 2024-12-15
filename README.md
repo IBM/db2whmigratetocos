@@ -97,109 +97,100 @@ The entire list can be exported to a csv. The options for the above command is a
 - -- scope - tablespace/schema by which the tables needs to listed 
 - -- list - all/list of tablespaces/list of schema - the tables under the specified list will be listed 
 - -- detail / --no-detail - it prints the information regarding the table size, table schema 
-- -- export / --no-export - it exports the printed list to a CSV that can used for the MOVE command 
-
-```shell
-db2whmigratetocos list --scope schema/tablespace --list all/list of schemas or tablespaces --user-id user_id --password password --hostname test.db2w.cloud.ibm.com
+- -- export / --no-export - it exports the printed list to a CSV that can used for the MOVE command
+```
+db2whmigratetocos list
+--scope schema/tablespace --list all/list of schemas or tablespaces
+--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
 --dsn\<DSN name\> --export-csv/--no-export-csv –detail/--no-detail
-
+```
 **Examples:** 
 
-List all the tablespaces
+**List all the tables in  tablespaces** 
 
+```
 db2whmigratetocos list
+--scope tablespace --list all --no-detail
+--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
+```
 
-\--scope tablespace --list all
+**List the tables in the tablespaces in detail** 
 
-\--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
-
-List the tables in the tablespaces in detail
-
+```
 db2whmigratetocos list
+--scope tablespace --list all
+--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
+--detail
+```
 
-\--scope tablespace --list all
+**List the tables in a list of tablespaces in detail** 
 
-\--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
-
-\--detail
-
-List the tables in a list of tablespaces in detail
-
+```
 db2whmigratetocos list
+--scope tablespace --list TBSPACE1,TBSPACE2,TBSPACE3
+--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
+--detail
+```
 
-\--scope tablespace --list TBSPACE1,TBSPACE2,TBSPACE3
+**List the tables in all tablespaces in detail and export to CSV** 
 
-\--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
-
-\--detail
-
-List the tables in all tablespaces in detail and export to CSV
-
+```
 db2whmigratetocos list
+--scope tablespace --list all
+--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
+--detail --export-csv
+```
 
-\--scope tablespace --list all
+**List the tables in list tablespaces in detail and export to CSV** 
 
-\--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
-
-\--detail --export-csv
-
-List the tables in list tablespaces in detail and export to CSV
-
+```
 db2whmigratetocos list
+--scope tablespace --list TBSPACE1,TBSPACE2
+--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
+--detail --export-csv
+```
 
-\--scope tablespace --list TBSPACE1,TBSPACE2
+**List all the schemas** 
 
-\--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
-
-\--detail --export-csv
-
-List all the schemas
-
+```
 db2whmigratetocos list
+--scope schema --list all
+--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
+```
 
-\--scope schema --list all
+**List the tables in the schema in detail**
 
-\--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
-
-List the tables in the schema in detail
-
+```
 db2whmigratetocos list
+--scope schema --list all
+--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
+--detail
+```
 
-\--scope schema --list all
+**List the tables in a list of schema in detail**
 
-\--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
-
-\--detail
-
-List the tables in a list of schema in detail
-
+```
 db2whmigratetocos list
+--scope tablespace --list SCHEMA1,SCHEMA2
+--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
+--detail
+```
 
-\--scope tablespace --list SCHEMA1,SCHEMA2
-
-\--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
-
-\--detail
-
-List the tables in all schemas in detail and export to CSV
-
+**List the tables in all schemas in detail and export to CSV**
+```
 db2whmigratetocos list
+--scope schema --list all
+--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
+--detail --export-csv
+```
 
-\--scope schema --list all
-
-\--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
-
-\--detail --export-csv
-
-List the tables in list schema in detail and export to CSV
-
+**List the tables in list schema in detail and export to CSV**
+```
 db2whmigratetocos list
-
-\--scope schema --list SCHEMA1,SCHEMA2
-
-\--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
-
-\--detail --export-csv
+--scope schema --list SCHEMA1,SCHEMA2
+--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
+--detail --export-csv
+```
 
 **Move the tablespaces to COS from Block**
 
