@@ -1,48 +1,23 @@
 # IBM Db2whmigratetocos
 
-IBM® Db2whmigratetocos is a tool used to migrate data between the block storage in the db2 warehouse instances to COS buckets. Once configured, you can trigger migrations through a command line interface
+IBM® Db2whmigratetocos is a tool used to migrate data between the block storage in the db2 warehouse instances to COS buckets. Once configured, you can trigger migrations through a command line interface installed in a virtual machine. You will also be able to track and monitor the active and completed migrations 
 
 **Note:**
-
 -   The IBM Db2whmigratetocos works with Db2 warehouse V3.0 and above, that has support to the Native COS feature
-
--   IBM Db2whmigratetocos is available on the Red Hat Enterprise Linux 9.x.
+-   IBM Db2whmigratetocos can be run in the Virtual machine wiht Red Hat Enterprise Linux 9.x.
 
 **Supported migration scenarios include:**
 
 -   Move the tables in all tablespace
-
 -   Move all tablespace with skipping one or more tablespaces
-
 -   Move the tables in all schemas
-
 -   Move all schemas with skipping one or more schemas
-
+-   Move by the generated CSV by skipping schema/tablespace
 -   List the tables in tablespaces
-
--   list the tables in tablespaces and export to CSV
-
+-   List the tables in tablespaces and export to CSV
 -   List the tables in schema
-
 -   List the tables in and export to CSV
 
--   Move by the generated CSV by skipping schema/tablespace
-
-## Prerequisites and restrictions for Db2whmigratetocos
-
-This provides a list of the prerequisites and restrictions for Db2whmigratetocos
-
-**Prerequisites:**
-
-Db2whmigratetocos have few prerequisites, i.e:
-
--   Requires Python 3.9+ and PIP to install the wheel file
-
--   Working yum repository connections, Db2whmigratetocos installs dependencies using yum
-
-**Restrictions and limitations**
-
-The Db2whmigratetocos has some restrictions and limitations.
 
 **Operations that are restricted on the source table**
 
@@ -72,7 +47,7 @@ There are operations that can cause the tool to fail while a move is in progress
 
 -   Altering non-user-configurable values in the protocol table
 
-Installing and uninstalling Db2whmigratetocos
+## Installing  Db2whmigratetocos
 
 The following information describes the installation pre-requisites and contains instructions for installation and setup
 
@@ -82,13 +57,11 @@ To use the Db2whmigratetocos CLI tool, you require an RHEL 9.X Virtual machine w
 
 Required before installing the tool
 
--   Python3.9+ and PIP being available in the Virtual Machine
-
+-   Requires Python 3.9+ and PIP to install the wheel file
+-   Working yum repository connections, Db2whmigratetocos installs dependencies using yum - Unix-ODBC and Python-devel
 -   Hostname for the corresponding Db2 warehouse instance
-
 -   Root user privileges for the Virtual machine
-
--   db2inst1 and the instance password for the corresponding Db2 warehouse instance
+-   User_id with SYSADM  and the password for the corresponding Db2 warehouse instance
 
 **Setting up the Db2whmigratetocos:**
 
@@ -98,29 +71,20 @@ The db2whmigratetocos tool is in the form of a wheel package that can be install
 
 1.Create a python virtual environment and activate it.
 
-python3 -m venv db2whmigrate-venv
+```python3 -m venv db2whmigrate-venv```
+```source db2whmigrate-venv/bin/activate```
 
-source db2whmigrate-venv/bin/activate
+2.Run Setup the db2whmigratetocos using the following command
 
-2\. Run pre_install.sh to install the dependencies
-
-./pre_install.sh
-
-3\. If the DSN is setup, the script will indentify, that can used for the connection to the warehouse instance. The user needs to be changed as a instance user, and the tool can be used directly
-
-Else,
-
-Run Setup the db2whmigratetocos using the following command
-
-db2whmigratetocos setup
+```db2whmigratetocos setup```
 
 when all of the options in the setup command is OK, then the tool is ready to use.
 
-Using the Db2whmigratetocos
+## Using the Db2whmigratetocos
 
 Db2whmigratetocos tool allow users to list the tables in the warehouse instance, by schema level or tablespace level and move them based on needs of the user. The user has the flexibility to skip the tables by schema level or tablespace level and initiate migration runs. The status of the migration run can be tracked using the status command.
 
-# Procedure:
+### Commands
 
 **List the tables in tablespaces/schemas with size**
 
