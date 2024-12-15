@@ -94,23 +94,16 @@ It lists upto 75 tables for each tablespace or schema mentioned in the list vari
 
 The entire list can be exported to a csv. The options for the above command is as follows:
 
-\-- scope - tablespace/schema by which the tables needs to listed\\n
+- -- scope - tablespace/schema by which the tables needs to listed 
+- -- list - all/list of tablespaces/list of schema - the tables under the specified list will be listed 
+- -- detail / --no-detail - it prints the information regarding the table size, table schema 
+- -- export / --no-export - it exports the printed list to a CSV that can used for the MOVE command 
 
-\-- list - all/list of tablespaces/list of schema - the tables under the specified list will be listed\\n
+```shell
+db2whmigratetocos list --scope schema/tablespace --list all/list of schemas or tablespaces --user-id user_id --password password --hostname test.db2w.cloud.ibm.com
+--dsn\<DSN name\> --export-csv/--no-export-csv –detail/--no-detail
 
-\-- detail / --no-detail - it prints the information regarding the table size, table schema \\n
-
-\-- export / --no-export - it exports the printed list to a CSV that can used for the MOVE command
-
-db2whmigratetocos list
-
-\--scope schema/tablespace --list all/list of schemas or tablespaces
-
-\--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
-
-\--dsn\<DSN name\> --export-csv/--no-export-csv –detail/--no-detail
-
-Examples:
+**Examples:** 
 
 List all the tablespaces
 
