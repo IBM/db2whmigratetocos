@@ -1,6 +1,6 @@
 """
 
-    Copyright IBM Corp. 2024-2025 All Rights Reserved.
+    Copyright IBM Corp. 2024 All Rights Reserved.
     Licensed Materials - Property of IBM
 
 """
@@ -361,6 +361,8 @@ def move(
             help="Move tables by tablespace/schema")] = None,
         dest_tbspace: Annotated[str, typer.Option(
             help="Destination tablespace in cos, where the data needs to be moved ")] = "OBJSTORESPACE1",
+        index_tbspace : Annotated[str, typer.Option(
+            help="Destination tablespace in cos, where the data needs to be moved ")] = None,
         copy_opts: Annotated[str, typer.Option(
             help="Destination tablespace in cos, where the data needs to be moved ")] = "COPY_USE_OTA,NO_STATS",
         user_id: Annotated[str, typer.Option(
@@ -389,15 +391,16 @@ def move(
     --csv-input - Give the generated CSV as input for the move command
     --index-tbspace - The tablespace in block where the indexes are stored
     --dsn -  The DSN name if it is already configured
-    --use-adc - Uses Sampling method to  create dictionary by default - give --use-adc to use ADC for dictionary creation
     --log-directory-path -  Pass the log directory base path to store the log files
+    --copy-opts - To pass the copy options required for the tool 
+    --runstats - To trigger external runstats after the table is moved
     \n
     Command:
     \n
     db2whmigratetocos move  --scope tablespace --list  DB_TS1\n 
     --dest-tbspace OBJSTORESPACE1 --index-tbspace USERSPACE1 \n
     --log-directory-path <path> --user-id  <user_id> --password <password>\n 
-    --hostname <>hostnamE> --use-adc\n
+    --hostname <>hostnamE> \n
      
     """
     try:
@@ -483,13 +486,16 @@ def move(
                                         if table_exists:
                                             selected_dest_tbspace = idx % len(
                                                 dest_tbspace_list)
-                                            index = check_for_user_created_indexes(user_id,password,hostname,port,database,row['tablename'],row['schema'],valid_dsn)
-                                            if index is True:
-                                                index_tbspace = "USERSPACE1"
+                                            if index_tbspace is None:
+                                                index = check_for_user_created_indexes(user_id,password,hostname,port,database,row['tablename'],row['schema'],valid_dsn)
+                                                if index is True:
+                                                    index_tbspace_found = "USERSPACE1"
+                                                else:
+                                                    index_tbspace_found = dest_tbspace_list[selected_dest_tbspace]
                                             else:
-                                                index_tbspace = dest_tbspace_list[selected_dest_tbspace]
+                                                index_tbspace_found = index_tbspace
                                             move_the_tables(row['schema'], row['tablename'], row['tablespace'], dest_tbspace_list[selected_dest_tbspace],
-                                                            log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,runstats)
+                                                            log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace_found,runstats)
                                         else:
                                             print(
                                                 "Table not found in the tablespace")
@@ -525,13 +531,16 @@ def move(
                                         for idx, items in enumerate(tables_in_userspace):
                                             selected_dest_tbspace = idx % len(
                                                 dest_tbspace_list)
-                                            index = check_for_user_created_indexes(user_id,password,hostname,port,database,items[0],items[1],valid_dsn)
-                                            if index is True:
-                                                index_tbspace = "USERSPACE1"
+                                            if index_tbspace is not None:   
+                                                index = check_for_user_created_indexes(user_id,password,hostname,port,database,items[0],items[1],valid_dsn)
+                                                if index is True:
+                                                    index_tbspace_found = "USERSPACE1"
+                                                else:
+                                                    index_tbspace_found = dest_tbspace_list[selected_dest_tbspace]
                                             else:
-                                                index_tbspace = dest_tbspace_list[selected_dest_tbspace]
+                                                index_tbspace_found = index_tbspace
                                             move_the_tables(items[1], items[0], tbspace, dest_tbspace_list[selected_dest_tbspace],
-                                                            log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,copy_opts,runstats)
+                                                            log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace_found,copy_opts,runstats)
                                     if len(tables_in_userspace) == 0:
                                         print("No tables found in the tablespace")
                                 else:
@@ -563,13 +572,16 @@ def move(
                                         if table_exists:
                                             selected_dest_tbspace = idx % len(dest_tbspace_list)
                                             if source_tablespace not in dest_tbspace_list:
-                                                index = check_for_user_created_indexes(user_id,password,hostname,port,database,row['tablename'],row['schema'],valid_dsn)
-                                                if index is True:
-                                                    index_tbspace = "USERSPACE1"
+                                                if index_tbspace is not None:  
+                                                    index = check_for_user_created_indexes(user_id,password,hostname,port,database,row['tablename'],row['schema'],valid_dsn)
+                                                    if index is True:
+                                                        index_tbspace_found = "USERSPACE1"
+                                                    else:
+                                                        index_tbspace_found = dest_tbspace_list[selected_dest_tbspace]
                                                 else:
-                                                     index_tbspace = dest_tbspace_list[selected_dest_tbspace]
+                                                    index_tbspace_found = index_tbspace
                                                 move_the_tables(row['schema'], row['tablename'], source_tablespace, dest_tbspace_list[selected_dest_tbspace],
-                                                                log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,copy_opts,runstats)
+                                                                log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace_found,copy_opts,runstats)
                                             else:
                                                 print(
                                                     "The source and the destination are same")
@@ -606,14 +618,17 @@ def move(
                                             selected_dest_tbspace = idx % len(dest_tbspace_list)
                                             source_tablespace = get_tbpsace_name_for_table(
                                                 user_id, password, hostname, port, database, item[0], schema,valid_dsn)
-                                            index = check_for_user_created_indexes(user_id,password,hostname,port,database,item[0],schema,valid_dsn)
-                                            if index is True:
-                                                index_tbspace = "USERSPACE1" 
+                                            if index_tbspace is not None:
+                                                index = check_for_user_created_indexes(user_id,password,hostname,port,database,item[0],schema,valid_dsn)
+                                                if index is True:
+                                                    index_tbspace_found = "USERSPACE1" 
+                                                else:
+                                                    index_tbspace_found = dest_tbspace_list[selected_dest_tbspace]
                                             else:
-                                                index_tbspace = dest_tbspace_list[selected_dest_tbspace]
+                                                index_tbspace_found
                                             if source_tablespace not in dest_tbspace_list:
                                                 move_the_tables(
-                                                    schema, item[0], source_tablespace, dest_tbspace_list[selected_dest_tbspace], log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,copy_opts,runstats)
+                                                    schema, item[0], source_tablespace, dest_tbspace_list[selected_dest_tbspace], log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace_found,copy_opts,runstats)
                                     if len(tables_in_schema) == 0:
                                         print("No tables found in the schema")
                                 else:
@@ -627,13 +642,16 @@ def move(
                     if table_name is not None:
                         log_directory_name = create_a_log_directory_for_a_batch(log_directory_base_path)
                         source_tablespace = get_tbpsace_name_for_table(user_id, password, hostname, port, database,table_name, schema_name,valid_dsn)
-                        index = check_for_user_created_indexes(user_id,password,hostname,port,database,table_name,schema_name,valid_dsn)
-                        if index is True:
-                            index_tbspace = "USERSPACE1"
+                        if index_tbspace is not None:
+                            index = check_for_user_created_indexes(user_id,password,hostname,port,database,table_name,schema_name,valid_dsn)
+                            if index is True:
+                                index_tbspace_found = "USERSPACE1"
+                            else:
+                                index_tbspace_found = dest_tbspace_list[0]
                         else:
-                            index_tbspace = dest_tbspace_list[0]
+                           index_tbspace_found = index_tbspace
                         if source_tablespace not in dest_tbspace_list:
-                             move_the_tables(schema_name,table_name, source_tablespace, dest_tbspace_list[0], log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace,copy_opts,runstats)
+                             move_the_tables(schema_name,table_name, source_tablespace, dest_tbspace_list[0], log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace_found,copy_opts,runstats)
                     else:
                         print("The table name is not provided") 
                 else:
