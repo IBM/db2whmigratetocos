@@ -195,228 +195,175 @@ db2whmigratetocos list
 **Move the tablespaces to COS from Block**
 
 This command initiates the move of the list of tables to COS - OBJSTORESPACE.The move can be done at the tablespace or schema level, using ALL or the specified list of tablespaces (or) schemas.
-
 Each run of the move command will generate a directory containing the logs and report metrics. Check the movement status with the status command - db2whmigratetocos status -help.
 
-\--scope - tablespace/schema - move tables by tablespace/schema\\n
+- --scope - tablespace/schema - move tables by tablespace/schema\\n
+- --list - all/list of tablespaces/list of schema - the tables under the specified list will be listed\\n
+- --dest_tablespace - OBJSTORESPACE1 - The destination tablespace in COS\\n
+- --skip-schema - Skip a list of schema in the list - only used when the scope is schema\\n
+- --skip-tbspace - Skip a list of tablespaces in the list - only used when the scope is tablespace\\n
+- --csv-input - Give the generated CSV as input for the move command
+- --index-tbspace - The tablespace in block where the indexes are stored
+- --dsn - The DSN name if it is already configured
+- --copy-opts - To pass the copy options required for the tool
+    -  COPY_USE_OTA - Required  parameter should be provided
+    -  NO_STATS - If you do not want to run,runstats as part of the movement, to skip it do not provide the option - Optional
+    -  USE_ADC - Uses Automatic dictinary creation to create the dictionary/skipping uses sampling method to create dictionary - Optional
+    - ALLOW_READ_ACCESS - If you wanna perform offline data migration, skipping this will enable online data migration - Optional
+- --runstats - To trigger external runstats after the table is moved
+- --log-directory-path - Pass the log directory base path to store the log files
 
-\--list - all/list of tablespaces/list of schema - the tables under the specified list will be listed\\n
-
-\--dest_tablespace - OBJSTORESPACE1 - The destination tablespace in COS\\n
-
-\--skip-schema - Skip a list of schema in the list - only used when the scope is schema\\n
-
-\--skip-tbspace - Skip a list of tablespaces in the list - only used when the scope is tablespace\\n
-
-\--csv-input - Give the generated CSV as input for the move command
-
-\--index-tbspace - The tablespace in block where the indexes are stored
-
-\--dsn - The DSN name if it is already configured
-
-\--use-adc - Uses Sampling method to create dictionary by default - give --use-adc to use ADC for dictionary creation
-
-\--log-directory-path - Pass the log directory base path to store the log files
-
-Note: The move command needs to be run in nohup mode to make sure the process does not stop if the client gets disconnected
+Note: The move command needs to be run in nohup mode to make sure the process does not stop if the client connection in the VM gets disconnected
 
 Command:
-
+```
 nohup db2whmigratetocos move --scope tablespace --list DB_TS1
-
-\--dest-tbspace OBJSTORESPACE1 --index-tbspace USERSPACE1
-
+\--dest-tbspace OBJSTORESPACE1 --index-tbspace USERSPACE1 --copy-opts
 \--log-directory-path \<path\> --user-id \<user_id\> --password \<password\>
-
 \--hostname \<\>hostnamE\> --use-adc
-
 \> migration_run.out 2\>&1 &
-
+```
 **To Move a single table,**
-
+```
 db2whmigratetocos move   
  --scope table --schema-name \<schema-name\>  
  --table-name \<table-name\>  
  --dest-tbspace \<destination_tbspace\>  
- --index-tbspace \<tablespace in block\>  
+ --copy-opts COPY_USE_OTA,NO_STATS,USE_ADC,ALLOW_READ_ACCESS
  --dsn \<DSN-NAME\> --logs-path \<logs-path\>  
  --user-id \<user_id\> --password \<password\>  
  --hostname \<hostname\>
-
+```
 Examples:
 
-Move by tables in all tablespaces
-
+**Move by tables in all tablespaces**
+```
 db2whmigratetocos move
+--scope tablespace --list all
+--dest-tbspace OBJSTORESPACE1 
+--log-directory-path \<path\>
+--copy-opts COPY_USE_OTA,NO_STATS,USE_ADC,ALLOW_READ_ACCESS
+--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
+\> migration_run.out 2\>&1 &
+```
 
-\--scope tablespace --list all
-
-\--dest-tbspace OBJSTORESPACE1 --index-tbspace USERSPACE1
-
-\--log-directory-path \<path\>
-
-\--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
+**Move by tables in list of tablespaces**
+```
+db2whmigratetocos move
+--scope tablespace --list TBSPACE1,TBSPACE2
+--dest-tbspace OBJSTORESPACE1 
+--copy-opts COPY_USE_OTA,NO_STATS,USE_ADC,ALLOW_READ_ACCESS
+--log-directory-path \<path\>
+--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
+--dsn <dsn-name>
 
 \> migration_run.out 2\>&1 &
+```
 
-Move by tables in list of tablespaces
-
+**Move by tables in list of tablespaces with skip tablespaces**
+```
 db2whmigratetocos move
-
-\--scope tablespace --list TBSPACE1,TBSPACE2
-
-\--dest-tbspace OBJSTORESPACE1 --index-tbspace USERSPACE1
-
-\--log-directory-path \<path\>
-
-\--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
-
+--scope tablespace --list all
+--dest-tbspace OBJSTORESPACE1
+--skip-tbspace TBSPACE1
+--copy-opts COPY_USE_OTA,NO_STATS,USE_ADC,ALLOW_READ_ACCESS
+--log-directory-path \<path\>
+--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
+--dsn <dsn-name>
 \> migration_run.out 2\>&1 &
+```
 
-Move by tables in list of tablespaces with skip tablespaces
-
+**Move by tables in all schemas**
+```
 db2whmigratetocos move
-
-\--scope tablespace --list all
-
-\--dest-tbspace OBJSTORESPACE1
-
-\--skip-tbspace TBSPACE1
-
-\--index-tbspace USERSPACE1
-
-\--log-directory-path \<path\>
-
-\--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
-
+--scope schema --list all
+--dest-tbspace OBJSTORESPACE1
+--copy-opts COPY_USE_OTA,NO_STATS,USE_ADC,ALLOW_READ_ACCESS
+--log-directory-path \<path\>
+--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
+--dsn <dsn-name>
 \> migration_run.out 2\>&1 &
-
-Move by tables in all schemas
-
+```
+**Move by tables in list of schema**
+```
 db2whmigratetocos move
-
-\--scope schema --list all
-
-\--dest-tbspace OBJSTORESPACE1
-
-\--index-tbspace USERSPACE1
-
-\--log-directory-path \<path\>
-
-\--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
-
+--scope schema --list SCHEMA1,SCHEMA2
+--dest-tbspace OBJSTORESPACE1
+--copy-opts COPY_USE_OTA,NO_STATS,USE_ADC,ALLOW_READ_ACCESS
+--log-directory-path \<path\>
+--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
+--dsn <dsn-name>
 \> migration_run.out 2\>&1 &
-
-Move by tables in list of schema
-
+```
+**Move by tables in list of schema with skip schema**
+```
 db2whmigratetocos move
-
-\--scope schema --list SCHEMA1,SCHEMA2
-
-\--dest-tbspace OBJSTORESPACE1
-
-\--index-tbspace USERSPACE1
-
-\--log-directory-path \<path\>
-
-\--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
-
+--scope schema --list all
+--dest-tbspace OBJSTORESPACE1
+--skip-schema SCHEMA1,SCHEMA2
+--copy-opts COPY_USE_OTA,NO_STATS,USE_ADC,ALLOW_READ_ACCESS
+--log-directory-path \<path\>
+--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
+--dsn <dsn-name>
 \> migration_run.out 2\>&1 &
-
-Move by tables in list of schema with skip schema
-
+```
+**Move tables by schema-skip schema with CSV as input**
+```
 db2whmigratetocos move
-
-\--scope schema --list all
-
-\--dest-tbspace OBJSTORESPACE1
-
-\--skip-schema SCHEMA1,SCHEMA2
-
-\--index-tbspace USERSPACE1
-
-\--log-directory-path \<path\>
-
-\--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
-
+--scope schema --csv-input \<csv filename\>
+--dest-tbspace OBJSTORESPACE1
+--skip-schema SCHEMA1,SCHEMA2
+--copy-opts COPY_USE_OTA,NO_STATS,USE_ADC,ALLOW_READ_ACCESS
+--log-directory-path \<path\>
+--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
+--dsn <dsn-name>
 \> migration_run.out 2\>&1 &
-
-Move tables by schema-skip schema with CSV as input
-
+```
+**Move tables by Tablespace-skip tablespace with CSV as input**
+```
 db2whmigratetocos move
-
-\--scope schema --csv-input \<csv filename\>
-
-\--dest-tbspace OBJSTORESPACE1
-
-\--skip-schema SCHEMA1,SCHEMA2
-
-\--index-tbspace USERSPACE1
-
-\--log-directory-path \<path\>
-
-\--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
-
+--scope tablespace --csv-input \<csv filename\>
+--dest-tbspace OBJSTORESPACE1
+--skip-tbspace tablespace1,tablespace2
+--copy-opts COPY_USE_OTA,NO_STATS,USE_ADC,ALLOW_READ_ACCESS
+--log-directory-path \<path\>
+--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
+--dsn <dsn-name>
 \> migration_run.out 2\>&1 &
+```
 
-Move tables by Tablespace-skip tablespace with CSV as input
-
-db2whmigratetocos move
-
-\--scope tablespace --csv-input \<csv filename\>
-
-\--dest-tbspace OBJSTORESPACE1
-
-\--skip-tbspace tablespace1,tablespace2
-
-\--index-tbspace USERSPACE1
-
-\--log-directory-path \<path\>
-
-\--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
-
-\> migration_run.out 2\>&1 &
-
-**Status and the metrics of the migration jobs**
+**Status of the migration jobs**
 
 The command is used to fetch the details about the tables in block and cos.It can give the details and the status of a migration runs as well.
 
-Command
+**Command**
+````
+db2whmigratetocos status
+--scope migration-runs/tables
+--active-runs
+--log-directory-path \<path\>
+--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
+````
+**Examples:**
 
-db2whmigratetocos status\\n
-
-\--scope migration-runs/tables\\n
-
-\--active-runs\\n
-
-\--log-directory-path \<path\>
-
-\--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
-
-Examples:
-
-To know about the status of the previous migration-runs
+**To know about the status of the previous migration-runs**
 
 db2whmigratetocos status
+--scope migration-runs –no-active-runs --log-directory-path \<path\>
+--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
 
-\--scope migration-runs –no-active-runs --log-directory-path \<path\>
-
-\--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
-
-To know about the status of the active migration-runs
-
+**To know about the status of the active migration-runs**
+```
 db2whmigratetocos status
 
 \--scope migration-runs –-active-runs --log-directory-path \<path\>
 
 \--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
-
-To know about the status of the tables in block and COS
-
+```
+**To know about the status of the tables in block and COS**
+```
 db2whmigratetocos status
-
-\--scope tables. –-active-runs --log-directory-path \<path\>
-
-\--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
-
+--scope tables. –-active-runs --log-directory-path \<path\>
+--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
+```
 
