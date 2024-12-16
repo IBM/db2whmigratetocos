@@ -334,7 +334,7 @@ db2whmigratetocos move
 
 **Status of the migration jobs**
 
-The command is used to fetch the details about the tables in block and cos.It can give the details and the status of a migration runs as well.
+The command is used to fetch the details about the tables in block and cos.It can give the details and the status of a migration runs as well. The scope paramter value -  migration runs will list the details about the table, while the tables - will list us the number of tables in block storage and COS respectively.
 
 **Command**
 ````
@@ -355,10 +355,8 @@ db2whmigratetocos status
 **To know about the status of the active migration-runs**
 ```
 db2whmigratetocos status
-
-\--scope migration-runs –-active-runs --log-directory-path \<path\>
-
-\--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
+--scope migration-runs –-active-runs --log-directory-path \<path\>
+--user-id \<user-id\> --password \<password\> --hostname \<host-name\>
 ```
 **To know about the status of the tables in block and COS**
 ```
