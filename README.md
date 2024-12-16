@@ -9,8 +9,10 @@ IBM® Db2whmigratetocos is a tool used to migrate data between the block storage
 **Supported migration scenarios include:**
 
 -   Move the tables in all tablespace
+-   Move selected tablespace tables
 -   Move all tablespace with skipping one or more tablespaces
 -   Move the tables in all schemas
+-   Move selected schema tables
 -   Move all schemas with skipping one or more schemas
 -   Move by the generated CSV by skipping schema/tablespace
 -   List the tables in tablespaces
@@ -123,7 +125,7 @@ db2whmigratetocos list
 --detail
 ```
 
-**List the tables in a list of tablespaces in detail** 
+**List the tables in tablespaces list in detail** 
 
 ```
 db2whmigratetocos list
@@ -141,7 +143,7 @@ db2whmigratetocos list
 --detail --export-csv
 ```
 
-**List the tables in list tablespaces in detail and export to CSV** 
+**List the tables in tablespace list in detail and export to CSV** 
 
 ```
 db2whmigratetocos list
@@ -167,7 +169,7 @@ db2whmigratetocos list
 --detail
 ```
 
-**List the tables in a list of schema in detail**
+**List the tables in schema list in detail**
 
 ```
 db2whmigratetocos list
@@ -184,7 +186,7 @@ db2whmigratetocos list
 --detail --export-csv
 ```
 
-**List the tables in list schema in detail and export to CSV**
+**List the tables in schema list in detail and export to CSV**
 ```
 db2whmigratetocos list
 --scope schema --list SCHEMA1,SCHEMA2
@@ -197,19 +199,19 @@ db2whmigratetocos list
 This command initiates the move of the list of tables to COS - OBJSTORESPACE.The move can be done at the tablespace or schema level, using ALL or the specified list of tablespaces (or) schemas.
 Each run of the move command will generate a directory containing the logs and report metrics. Check the movement status with the status command - db2whmigratetocos status -help.
 
-- --scope - tablespace/schema - move tables by tablespace/schema\\n
-- --list - all/list of tablespaces/list of schema - the tables under the specified list will be listed\\n
-- --dest_tablespace - OBJSTORESPACE1 - The destination tablespace in COS\\n
-- --skip-schema - Skip a list of schema in the list - only used when the scope is schema\\n
-- --skip-tbspace - Skip a list of tablespaces in the list - only used when the scope is tablespace\\n
+- --scope - tablespace/schema - move tables by tablespace/schema
+- --list - all/list of tablespaces/list of schema - the tables under the specified list will be listed
+- --dest_tablespace - OBJSTORESPACE1 - The destination tablespace in COS
+- --skip-schema - Skip a list of schema in the list - only used when the scope is schema
+- --skip-tbspace - Skip a list of tablespaces in the list - only used when the scope is tablespace
 - --csv-input - Give the generated CSV as input for the move command
-- --index-tbspace - The tablespace in block where the indexes are stored
+- --index-tbspace - The tablespace in block where indexes will be stored
 - --dsn - The DSN name if it is already configured
 - --copy-opts - To pass the copy options required for the tool
     -  COPY_USE_OTA - Required  parameter should be provided
-    -  NO_STATS - If you do not want to run,runstats as part of the movement, to skip it do not provide the option - Optional
+    -  NO_STATS - If you don't want runstats to be run on the Moved table, If this option is not provided, runstats is collected as part of the Admin Move Table operation.- Optional
     -  USE_ADC - Uses Automatic dictinary creation to create the dictionary/skipping uses sampling method to create dictionary - Optional
-    - ALLOW_READ_ACCESS - If you wanna perform offline data migration, skipping this will enable online data migration - Optional
+    -  ALLOW_READ_ACCESS - For Offline Admin Move Table, not providing this option will enable online data migration - Optional.
 - --runstats - To trigger external runstats after the table is moved
 - --log-directory-path - Pass the log directory base path to store the log files
 
@@ -236,7 +238,7 @@ db2whmigratetocos move
 ```
 Examples:
 
-**Move by tables in all tablespaces**
+**Move tables in all tablespaces**
 ```
 db2whmigratetocos move
 --scope tablespace --list all
@@ -247,7 +249,7 @@ db2whmigratetocos move
 \> migration_run.out 2\>&1 &
 ```
 
-**Move by tables in list of tablespaces**
+**Move tables in tablespace list**
 ```
 db2whmigratetocos move
 --scope tablespace --list TBSPACE1,TBSPACE2
@@ -260,7 +262,7 @@ db2whmigratetocos move
 \> migration_run.out 2\>&1 &
 ```
 
-**Move by tables in list of tablespaces with skip tablespaces**
+**Move tables in all other tablespaces except skip list**
 ```
 db2whmigratetocos move
 --scope tablespace --list all
@@ -273,7 +275,7 @@ db2whmigratetocos move
 \> migration_run.out 2\>&1 &
 ```
 
-**Move by tables in all schemas**
+**Move tables in all schemas**
 ```
 db2whmigratetocos move
 --scope schema --list all
@@ -284,7 +286,7 @@ db2whmigratetocos move
 --dsn <dsn-name>
 \> migration_run.out 2\>&1 &
 ```
-**Move by tables in list of schema**
+**Move tables in schema list**
 ```
 db2whmigratetocos move
 --scope schema --list SCHEMA1,SCHEMA2
@@ -295,7 +297,7 @@ db2whmigratetocos move
 --dsn <dsn-name>
 \> migration_run.out 2\>&1 &
 ```
-**Move by tables in list of schema with skip schema**
+**Move tables in all schemas except skip list**
 ```
 db2whmigratetocos move
 --scope schema --list all
