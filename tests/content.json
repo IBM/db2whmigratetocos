@@ -1,0 +1,40 @@
+{
+    "valid_inputs": {
+        "Driver": "{/root/db2_cli_odbc_driver/odbc_cli/clidriver/lib/libdb2o.so}",
+        "Security": "ssl",
+        "Protocol": "TCPIP",
+        "connection_string": "Driver={/root/db2_cli_odbc_driver/odbc_cli/clidriver/lib/libdb2o.so};Database=BLUDB;Hostname=********;Port=50001;Uid=db2inst1;Pwd=********;Security=ssl;Protocol=TCPIP;",
+        "Hostname": "**********",
+        "Uid": "db2inst1",
+        "Pwd": "******",
+        "Database": "BLUDB",
+        "Port": "50001",
+        "scope": "tablespace",
+        "Tablespace": [
+            "",
+            "",
+            "",
+            ""
+        ],
+        "schema_name": [
+            ""
+        ],
+        "tablespace_list": [
+            "USERSPACE1",
+            "OBJSTORESPACE1"
+        ],
+        "schema_list": [
+            "DB2INST1"
+        ],
+        "table_name": [
+            "",
+            "",
+            "",
+            ""
+        ]
+    },
+    "invalid_inputs": {
+        "Uid": "db2inst1",
+        "Database": "4"
+    }
+}
