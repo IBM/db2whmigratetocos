@@ -1,3 +1,5 @@
+# Copyright IBM Corp. 2024  All Rights Reserved.
+# Licensed Materials - Property of IBM
 # Security Policy
 
 ## Supported Versions
@@ -7,10 +9,8 @@ currently being supported with security updates.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+| 3.12    | :Python:           |
+| 9.X     | RHEL VM            |
 
 ## Reporting a Vulnerability
 
