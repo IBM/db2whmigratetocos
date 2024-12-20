@@ -73,9 +73,9 @@ The db2whmigratetocos tool is in the form of a wheel package that can be install
 
 1.Create a python virtual environment and activate it.
 
-```python3 -m venv db2whmigrate-venv```
-```source db2whmigrate-venv/bin/activate```
-```pip3 install db2whmigratetocos-0.0.1-py3-none-any.whl```
+- ```python3 -m venv db2whmigrate-venv```
+- ```source db2whmigrate-venv/bin/activate```
+- ```pip3 install db2whmigratetocos-0.0.1-py3-none-any.whl```
 
 2.Run Setup the db2whmigratetocos using the following command
 
