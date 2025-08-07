@@ -75,7 +75,7 @@ The db2whmigratetocos tool is in the form of a wheel package that can be install
 
 - ```python3 -m venv db2whmigrate-venv```
 - ```source db2whmigrate-venv/bin/activate```
-- ```pip3 install db2whmigratetocos-0.0.1-py3-none-any.whl```
+- ```pip3 install dist/db2whmigratetocos-0.0.1-py3-none-any.whl```
 
 The .whl file is available in the /dist that can be used.
 
@@ -93,108 +93,109 @@ Db2whmigratetocos tool allow users to list the tables in the warehouse instance,
 
 ### Commands
 
-**List the tables in tablespaces/schemas with size**
+**Fetch the tables in tablespaces/schemas with size**
 
-This helps in listing the tables with schema and size in KB by Tablespace or Schema.
+This helps in fetching the tables with schema and size in KB by Tablespace or Schema.
 
-It lists upto 75 tables for each tablespace or schema mentioned in the list variable
+It fetches upto 75 tables for each tablespace or schema mentioned in the `objects` option.
 
 The entire list can be exported to a csv. The options for the above command is as follows:
 
 - -- scope - tablespace/schema by which the tables needs to listed 
-- -- list - all/list of tablespaces/list of schema - the tables under the specified list will be listed 
+- -- objects - all/list of tablespaces/list of schema - the tables under the specified objects will be listed 
 - -- detail / --no-detail - it prints the information regarding the table size, table schema 
 - -- export / --no-export - it exports the printed list to a CSV that can used for the MOVE command
+
 ```
-db2whmigratetocos list
---scope schema/tablespace --list all/list of schemas or tablespaces
+db2whmigratetocos fetch
+--scope schema/tablespace --objects all/list of schemas or tablespaces
 --user-id user_id --password password --hostname test.db2w.cloud.ibm.com
 --dsn\<DSN name\> --export-csv/--no-export-csv –detail/--no-detail
 ```
 **Examples:** 
 
-**List all the tables in  tablespaces** 
+**Fetch all the tables in tablespaces** 
 
 ```
-db2whmigratetocos list
---scope tablespace --list all --no-detail
---user-id user_id --password password --hostname test.db2w.cloud.ibm.com
+db2whmigratetocos fetch
+--scope tablespace --objects all --no-detail
+--user-id user_id --password password --hostname test.db2w.cloud.ibm.com --enable-ssl
 ```
 
-**List the tables in the tablespaces in detail** 
+**Fetch the tables in the tablespaces in detail** 
 
 ```
-db2whmigratetocos list
---scope tablespace --list all
---user-id user_id --password password --hostname test.db2w.cloud.ibm.com
---detail
-```
-
-**List the tables in tablespaces list in detail** 
-
-```
-db2whmigratetocos list
---scope tablespace --list TBSPACE1,TBSPACE2,TBSPACE3
+db2whmigratetocos fetch
+--scope tablespace --objects all
 --user-id user_id --password password --hostname test.db2w.cloud.ibm.com
 --detail
 ```
 
-**List the tables in all tablespaces in detail and export to CSV** 
+**Fetch the tables in tablespaces list in detail** 
 
 ```
-db2whmigratetocos list
---scope tablespace --list all
+db2whmigratetocos fetch
+--scope tablespace --objects TBSPACE1,TBSPACE2,TBSPACE3
+--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
+--detail
+```
+
+**Fetch the tables in all tablespaces in detail and export to CSV** 
+
+```
+db2whmigratetocos fetch
+--scope tablespace --objects all
 --user-id user_id --password password --hostname test.db2w.cloud.ibm.com
 --detail --export-csv
 ```
 
-**List the tables in tablespace list in detail and export to CSV** 
+**Fetch the tables in tablespace list in detail and export to CSV** 
 
 ```
-db2whmigratetocos list
---scope tablespace --list TBSPACE1,TBSPACE2
+db2whmigratetocos fetch
+--scope tablespace --objects TBSPACE1,TBSPACE2
 --user-id user_id --password password --hostname test.db2w.cloud.ibm.com
 --detail --export-csv
 ```
 
-**List all the schemas** 
+**Fetch all the schemas** 
 
 ```
-db2whmigratetocos list
---scope schema --list all
+db2whmigratetocos fetch
+--scope schema --objects all
 --user-id user_id --password password --hostname test.db2w.cloud.ibm.com
 ```
 
-**List the tables in the schema in detail**
+**Fetch the tables in the schema in detail**
 
 ```
-db2whmigratetocos list
---scope schema --list all
---user-id user_id --password password --hostname test.db2w.cloud.ibm.com
---detail
-```
-
-**List the tables in schema list in detail**
-
-```
-db2whmigratetocos list
---scope tablespace --list SCHEMA1,SCHEMA2
+db2whmigratetocos fetch
+--scope schema --objects all
 --user-id user_id --password password --hostname test.db2w.cloud.ibm.com
 --detail
 ```
 
-**List the tables in all schemas in detail and export to CSV**
+**Fetch the tables in schema list in detail**
+
 ```
-db2whmigratetocos list
---scope schema --list all
+db2whmigratetocos fetch
+--scope tablespace --objects SCHEMA1,SCHEMA2
+--user-id user_id --password password --hostname test.db2w.cloud.ibm.com
+--detail
+```
+
+**Fetch the tables in all schemas in detail and export to CSV**
+```
+db2whmigratetocos fetch
+--scope schema --objects all
 --user-id user_id --password password --hostname test.db2w.cloud.ibm.com
 --detail --export-csv
 ```
 
-**List the tables in schema list in detail and export to CSV**
+**Fetch the tables in schema list in detail and export to CSV**
 ```
-db2whmigratetocos list
---scope schema --list SCHEMA1,SCHEMA2
+db2whmigratetocos fetch
+--scope schema --objects SCHEMA1,SCHEMA2
 --user-id user_id --password password --hostname test.db2w.cloud.ibm.com
 --detail --export-csv
 ```
@@ -205,7 +206,7 @@ This command initiates the move of the list of tables to COS - OBJSTORESPACE.The
 Each run of the move command will generate a directory containing the logs and report metrics. Check the movement status with the status command - db2whmigratetocos status -help.
 
 - --scope - tablespace/schema - move tables by tablespace/schema
-- --list - all/list of tablespaces/list of schema - the tables under the specified list will be listed
+- --objects - all/list of tablespaces/list of schema - the tables under the specified list will be listed
 - --dest_tablespace - OBJSTORESPACE1 - The destination tablespace in COS
 - --skip-schema - Skip a list of schema in the list - only used when the scope is schema
 - --skip-tbspace - Skip a list of tablespaces in the list - only used when the scope is tablespace

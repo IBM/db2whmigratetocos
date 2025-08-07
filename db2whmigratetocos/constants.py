@@ -13,7 +13,6 @@ STATUS_TABLE_HEADER = ["BatchId", "JobId", "Table", "Schema",
 STATUS_TABLE_HEADER_ACTIVE_RUNS = ["BatchId", "JobId", "Table", "Schema",
                                    "Status", "Source", "Destination", "Progress"]
 TABLESPACE_CSV_COLUMNS = ['tablespace',
-                          'tablename', 'schema', 'size', 'storage']
+                          'tablename', 'schema', 'size', 'storage', "independent"]
 SCHEMA_CSV_COLUMNS = ["schema", "tablename", "size"]
 COPY_OPTIONS = ["COPY_USE_OTA","NO_STATS","ALLOW_READ_ACCESS","USE_ADC"]
-
