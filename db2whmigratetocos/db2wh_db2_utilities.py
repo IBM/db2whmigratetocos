@@ -276,7 +276,10 @@ def get_parent_table(table, schema, object_space_list, fetch_details, cursor):
 
     return parent_tables
 
-def get_tables_parent_tables(tables_list: List[tuple], object_space_list, fetch_details: bool, user: str, password: str, hostname: str, port: str, database: str, dsn:str, enable_ssl: bool):
+def get_tables_parent_tables(tables_list: List[tuple], object_space_list, fetch_details: bool,
+                             user: str, password: str, hostname: str, port: str, database: str,
+                             dsn:str, enable_ssl: bool):
+
     import pyodbc
 
     connection_string = get_connection_string(user, password, hostname, port, database, dsn,
@@ -288,9 +291,6 @@ def get_tables_parent_tables(tables_list: List[tuple], object_space_list, fetch_
     all_tables = set(tables_list)
     queue = deque(tables_list)
 
-    # {"child_1": ["table_1", "table_2"], ...}
-    graph = defaultdict(list)
-
     # Collect parents of tables iteratively
     while queue:
         table_details = queue.popleft()
@@ -299,7 +299,6 @@ def get_tables_parent_tables(tables_list: List[tuple], object_space_list, fetch_
                                                 object_space_list, fetch_details, cur)
 
         for parent in parents:
-            graph[table_details].append(parent)
 
             if parent not in all_tables:
                 all_tables.add(parent)
@@ -307,42 +306,7 @@ def get_tables_parent_tables(tables_list: List[tuple], object_space_list, fetch_
                 # add the parent table to queue to check its dependencies
                 queue.append(parent)
 
-    in_digree = defaultdict(int)
-
-    # Initialize number of parent tables for each table to 0
-    for t in all_tables:
-        in_digree.setdefault(t, 0)
-
-    # Update number of parents for each table: {"table_1": 4, ...}
-    for child in graph:
-        in_digree[child] = len(graph[child])
-
-    # Queue of of independent tables
-    # Marks True to indicate independency
-    queue = deque([t + (True, ) for t in all_tables if in_digree.get(t, 0) == 0])
-    ordered = []
-
-    while queue:
-        table = queue.popleft()
-        ordered.append(table)
-
-        for child_table in graph:
-
-            if table[:-1] in graph[child_table]:
-                in_digree[child_table] -= 1
-
-                # If table's all parents are added to "ordered", the table is good to be added to
-                # "ordered"
-                if in_digree.get(child_table, 0) == 0:
-                    queue.append(child_table + (False, ))
-
-    if len(ordered) != len(all_tables):
-        _ordered = {t[:-1] for t in ordered}
-        cyclic_tables = [t[1] for t in all_tables - _ordered]
-
-        print(f"Cycle detected in following tables: {', '.join(cyclic_tables)}")
-
-    return ordered
+    return list(all_tables)
 
 def get_tables_under_tablespace_no_tabsize_in_db2woc(user: str, password: str, hostname: str, port: str, database: str, tablespace: str, dsn:str, enable_ssl: bool):
     """_summary_
@@ -590,7 +554,7 @@ def create_log_directory_for_migration_run(log_directory_base_path,directory_nam
         directory_path = check_if_logs_path_exist_else_create(log_directory_base_path)
         migration_sub_directory = str(
             directory_path)+"/"+directory_name.strip()
-        os.makedirs(migration_sub_directory)
+        os.makedirs(migration_sub_directory, exist_ok=True)
         return migration_sub_directory
     except Exception as e:
         print(e)

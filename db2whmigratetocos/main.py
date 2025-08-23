@@ -370,7 +370,7 @@ def fetch(
 def move(
         password: Annotated[str, typer.Option(help="Password of the User ID")],
         hostname: Annotated[str, typer.Option(help="Hostname of the Db2 warehouse Instance")],
-        list: Annotated[str, typer.Option(
+        objects: Annotated[str, typer.Option(
             help="Source tablespace/schema in block storage - all/comma seperated list of tablespace/schema")] = None,
         csv_input: Annotated[str, typer.Option(
             help="CSV file as input to the move command as .csv file without the path")] = None,
@@ -383,15 +383,15 @@ def move(
         schema_name: Annotated[str, typer.Option(
             help="Provide the schema name when moving a single table")] = None,
         runstats: Annotated[bool, typer.Option(
-            help="Provide the schema name when moving a single table")] = False,
+            help="Execute RUNSTAT command")] = False,
         table_name: Annotated[str, typer.Option(
             help="Move tables by tablespace/schema")] = None,
         dest_tbspace: Annotated[str, typer.Option(
             help="Destination tablespace in cos, where the data needs to be moved ")] = "OBJSTORESPACE1",
         index_tbspace : Annotated[str, typer.Option(
-            help="Destination tablespace in cos, where the data needs to be moved ")] = None,
+            help="Destination index tablespace in cos, where the index needs to be moved ")] = None,
         copy_opts: Annotated[str, typer.Option(
-            help="Destination tablespace in cos, where the data needs to be moved ")] = "COPY_USE_OTA,NO_STATS",
+            help="Copy options to be passed.")] = "COPY_USE_OTA,NO_STATS",
         user_id: Annotated[str, typer.Option(
             help="User Id to connect to Db2 warehouse Instance")] = "db2inst1",
         skip_schema: Annotated[str, typer.Option(
@@ -465,11 +465,11 @@ def move(
                         sys.exit(0)
             if valid_copy_opts is True:
                 print("The copy options are  valid - " + copy_opts)
-            if list is None and csv_input is None and scope != "table":
+            if objects is None and csv_input is None and scope != "table":
                 print("The list provided is empty. Kindly give all or a list of tablespaces/schemas")
                 sys.exit(0)
-            if list is not None:
-             src_db2_obj_list = list.split(",")
+            if objects is not None:
+             src_db2_obj_list = objects.split(",")
             if skip_tbspace is not None:
                skip_tbspace_list = skip_tbspace.split(",")
             else:
@@ -499,7 +499,7 @@ def move(
                 if csv_input is not None:
                     tables_in_df = validate_and_get_df_from_the_csv(
                         csv_input)
-                    if len(tables_in_df) > 1:
+                    if len(tables_in_df) > 0:
                         log_directory_name = create_a_log_directory_for_a_batch(log_directory_base_path)
                         for idx, row in enumerate(tables_in_df):
                             if row['tablespace'] in valid_tbspace_list:
@@ -523,7 +523,7 @@ def move(
                                             else:
                                                 index_tbspace_found = index_tbspace
                                             move_the_tables(row['schema'], row['tablename'], row['tablespace'], dest_tbspace_list[selected_dest_tbspace],
-                                                            log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace_found,runstats)
+                                                            log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace_found,copy_opts,runstats)
                                         else:
                                             print(
                                                 "Table not found in the tablespace")
@@ -538,7 +538,7 @@ def move(
                     else:
                         print("The CSV is empty")
                 else:
-                    if list is not None:
+                    if objects is not None:
                         all_tablespaces = 'all' if 'all' in src_db2_obj_list else None
                         if all_tablespaces == 'all':
                             tbspace_list = valid_tbspace_list
@@ -559,7 +559,7 @@ def move(
                                         for idx, items in enumerate(tables_in_userspace):
                                             selected_dest_tbspace = idx % len(
                                                 dest_tbspace_list)
-                                            if index_tbspace is not None:   
+                                            if index_tbspace is None:   
                                                 index = check_for_user_created_indexes(user_id,password,hostname,port,database,items[0],items[1],valid_dsn, enable_ssl)
                                                 if index is True:
                                                     index_tbspace_found = "USERSPACE1"
@@ -584,7 +584,7 @@ def move(
                     if csv_input != None:
                         tables_in_df = validate_and_get_df_from_the_csv(
                             csv_input)
-                        if len(tables_in_df) > 1:
+                        if len(tables_in_df) > 0:
                             log_directory_name = create_a_log_directory_for_a_batch(log_directory_base_path)
                             for idx, row in enumerate(tables_in_df):
                                 if row['schema'] in valid_schema_list:
@@ -600,7 +600,7 @@ def move(
                                         if table_exists:
                                             selected_dest_tbspace = idx % len(dest_tbspace_list)
                                             if source_tablespace not in dest_tbspace_list:
-                                                if index_tbspace is not None:  
+                                                if index_tbspace is None:  
                                                     index = check_for_user_created_indexes(user_id,password,hostname,port,database,row['tablename'],row['schema'],valid_dsn,enable_ssl)
                                                     if index is True:
                                                         index_tbspace_found = "USERSPACE1"
@@ -625,7 +625,7 @@ def move(
                         else:
                             print("The CSV is empty")
                     else:
-                        if list is not None:
+                        if objects is not None:
                             all_schemas = 'all' if 'all' in src_db2_obj_list else None
                              # validation of schema and setting the list for movment
                             if all_schemas == 'all':
@@ -646,7 +646,7 @@ def move(
                                             selected_dest_tbspace = idx % len(dest_tbspace_list)
                                             source_tablespace = get_tbpsace_name_for_table(
                                                 user_id, password, hostname, port, database, item[0], schema, valid_dsn, enable_ssl)
-                                            if index_tbspace is not None:
+                                            if index_tbspace is None:
                                                 index = check_for_user_created_indexes(user_id,password,hostname,port,database,item[0],schema,valid_dsn,enable_ssl)
                                                 if index is True:
                                                     index_tbspace_found = "USERSPACE1" 
@@ -670,7 +670,7 @@ def move(
                     if table_name is not None:
                         log_directory_name = create_a_log_directory_for_a_batch(log_directory_base_path)
                         source_tablespace = get_tbpsace_name_for_table(user_id, password, hostname, port, database,table_name, schema_name,valid_dsn,enable_ssl)
-                        if index_tbspace is not None:
+                        if index_tbspace is None:
                             index = check_for_user_created_indexes(user_id,password,hostname,port,database,table_name,schema_name,valid_dsn,enable_ssl)
                             if index is True:
                                 index_tbspace_found = "USERSPACE1"
