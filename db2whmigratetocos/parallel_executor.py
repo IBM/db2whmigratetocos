@@ -39,7 +39,7 @@ def execute_move(table_details: dict, params: dict, rr_callback: Callable):
 
         return (
             f"Skipping table '{table_details['tablename']}' as it is part of skip "
-            f"tablespace '{params['skip_schema']}'"
+            f"tablespace '{params['skip_tbspace']}'"
         )
 
     move_params = [
@@ -49,6 +49,12 @@ def execute_move(table_details: dict, params: dict, rr_callback: Callable):
         for item in (f"--{k.replace('_', '-')}", v)
     ]
 
+    move_params += [
+        f"--{param.replace('_', '-')}"
+        for param in ("runstats", "enable_ssl")
+        if params[param]
+    ]
+
     dest_tbspace = params["dest_tbspace"].strip(",").split(",")[rr_callback()]
 
     move_params.extend([
@@ -56,10 +62,6 @@ def execute_move(table_details: dict, params: dict, rr_callback: Callable):
         "--table-name", table_details["tablename"],
         "--schema-name", table_details["schema"]
     ])
-
-    for param in ("runstats", "enable_ssl"):
-        if params[param]:
-            move_params.append(f"--{param.replace('_', '-')}")
 
     cmd = ["db2whmigratetocos", "move"] + move_params
 

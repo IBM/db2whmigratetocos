@@ -16,7 +16,7 @@ import pandas as pd
 import typer
 from db2whmigratetocos.admin_move_table_func import cancel_terminate_admin_move_table
 from db2whmigratetocos.constants import COPY_OPTIONS, STATUS_TABLE_HEADER, STATUS_TABLE_HEADER_ACTIVE_RUNS
-from db2whmigratetocos.db2wh_db2_utilities import check_for_user_created_indexes, check_home_path, check_if_logs_path_exist_else_create, create_a_log_directory_for_a_batch, db2wh_pyodbc_connection, export_the_data_as_csv, get_list_of_objectspaces, get_schema_in_instance, get_tables_cnt_under_tablespaces, get_tables_parent_tables, get_tables_under_schem_notabsize_in_db2woc, get_tables_under_schema_in_db2woc, get_tables_under_tablespace_in_db2woc, get_tables_under_tablespace_no_tabsize_in_db2woc, get_tablespaces_in_block_and_cos, get_tabname_schemaname_under_tablespace_in_db2woc, get_tbpsace_name_for_table, list_migration_runs, move_the_tables, parse_the_json_files_for_status, print_export_tables_in_block_and_cos, print_table_row, validate_and_get_df_from_the_csv, validate_the_input_db2_objects
+from db2whmigratetocos.db2wh_db2_utilities import check_for_user_created_indexes, check_home_path, check_if_logs_path_exist_else_create, create_a_log_directory_for_a_batch, create_tablespace, db2wh_pyodbc_connection, export_the_data_as_csv, get_list_of_objectspaces, get_schema_in_instance, get_tables_cnt_under_tablespaces, get_tables_parent_tables, get_tables_under_schem_notabsize_in_db2woc, get_tables_under_schema_in_db2woc, get_tables_under_tablespace_in_db2woc, get_tables_under_tablespace_no_tabsize_in_db2woc, get_tablespaces_in_block_and_cos, get_tabname_schemaname_under_tablespace_in_db2woc, get_tbpsace_name_for_table, list_migration_runs, move_the_tables, parse_the_json_files_for_status, print_export_tables_in_block_and_cos, print_table_row, validate_and_get_df_from_the_csv, validate_the_input_db2_objects
 from .db2whmigratetocos_install_prereq import db2whmigratetocos_init
 
 app = typer.Typer()
@@ -668,8 +668,54 @@ def move(
             if scope == "table":
                 if schema_name is not None:
                     if table_name is not None:
+
+                        source_tablespace = get_tbpsace_name_for_table(
+                            user_id, password, hostname, port, database, table_name, schema_name,
+                            valid_dsn, enable_ssl
+                        )
+
+                        if source_tablespace == " ":
+
+                            print(
+                                f"Unable to resolve tablespace for table {table_name} in "
+                                f"schema {schema_name}. Check table and schema name."
+                            )
+
+                            sys.exit(1)
+
+                        valid_tbspace_list = get_tablespaces_in_block_and_cos(
+                            user_id, password, hostname, port, database, valid_dsn, enable_ssl
+                        )
+
+                        if dest_tbspace_list[0].lower() in (
+                            _tbspace.lower() for _tbspace in valid_tbspace_list
+                        ):
+                            # destination tablespace exists
+
+                            tables_in_tablespace = get_tabname_schemaname_under_tablespace_in_db2woc(
+                                user_id, password, hostname, port, database, dest_tbspace_list[0],
+                                valid_dsn, enable_ssl
+                            )
+
+                            src_table_exists = (table_name.lower(), schema_name.lower()) in {
+                                tuple(map(str.lower, p)) for p in tables_in_tablespace
+                            }
+
+                            # Source table exists in destination tablespace
+                            if src_table_exists:
+                                print(f"The table {table_name.lower()} already exists in the destination tablespace")
+                                sys.exit(1)
+
+                        else:
+                            # destination tablespace doesn't exist
+
+                            create_tablespace(
+                                user_id, password, hostname, port, database, dsn, enable_ssl,
+                                dest_tbspace_list[0]
+                            )
+
                         log_directory_name = create_a_log_directory_for_a_batch(log_directory_base_path)
-                        source_tablespace = get_tbpsace_name_for_table(user_id, password, hostname, port, database,table_name, schema_name,valid_dsn,enable_ssl)
+
                         if index_tbspace is None:
                             index = check_for_user_created_indexes(user_id,password,hostname,port,database,table_name,schema_name,valid_dsn,enable_ssl)
                             if index is True:
@@ -791,7 +837,7 @@ def status(
                 print("The db2whmigratetocos-logs folder is not present in the given path")
                 
    
-@ app.command()
+@app.command()
 def cancel(
         schema_name: Annotated[str, typer.Option(help="Schema Name of the table")],
         table_name: Annotated[str, typer.Option(help="Table Name to cancel the run")],

@@ -19,7 +19,7 @@ from rich.table import Table
 from rich.console import Console
 from db2whmigratetocos.admin_move_table_func import adm_move_table_ops_db2woc
 from db2whmigratetocos.constants import SCHEMA_CSV_COLUMNS, TABLESPACE_CSV_COLUMNS
-from db2whmigratetocos.queries import ADM_MOVE_TABLE_FIND_PHASE, GET_OBJECTSPACE_USING_SGNAME, GET_STORAGE_PATH_DEFINED_IN_INSTANCE, GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY, GET_USER_CREATED_INDEX, LIST_SCHEMAS, LIST_TABLES_IN_SCHEMA, LIST_TABLES_IN_TSPACE, LIST_TBSPACE_BY_TABNAME, LIST_TBSPACES, TAB_SIZE, GET_THE_ROW_COUNT, ADM_MOVE_TABLE_FIND_TARGET_TABLE, LIST_PARENT_TABLES
+from db2whmigratetocos.queries import ADM_MOVE_TABLE_FIND_PHASE, GET_OBJECTSPACE_USING_SGNAME, GET_STORAGE_PATH_DEFINED_IN_INSTANCE, GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY, GET_USER_CREATED_INDEX, LIST_SCHEMAS, LIST_TABLES_IN_SCHEMA, LIST_TABLES_IN_TSPACE, LIST_TBSPACE_BY_TABNAME, LIST_TBSPACES, TAB_SIZE, GET_THE_ROW_COUNT, ADM_MOVE_TABLE_FIND_TARGET_TABLE, LIST_PARENT_TABLES, CREATE_TABLESPACE
 
 
 console = Console()
@@ -1042,6 +1042,48 @@ def get_list_of_objectspaces(user_id, password, hostname, port, database, dsn:st
         print(e)
 
 
+def create_tablespace(user_id: str, password: str, hostname: str, port: str, database: str, dsn:str, enable_ssl: bool, tbspace: str):
+    """Creates tablespace
+
+    Parameters
+    ----------
+    user_id : str
+        _description_
+    password : str
+        _description_
+    hostname : str
+        _description_
+    port : str
+        _description_
+    database : str
+        _description_
+    dsn : str
+        _description_
+    enable_ssl : bool
+        _description_
+    """
+    try:
+        cnxn = db2wh_pyodbc_connection(
+        user_id, password, hostname, port, database, False, dsn, enable_ssl
+    )
+
+        conn = cnxn.cursor()
+        conn.execute(GET_STORAGE_PATH_DEFINED_IN_INSTANCE)
+        rows = conn.fetchall()
+
+        storage_groupe = next((row[0] for row in rows if "DB2REMOTE" in row[1]), None)
+
+        if storage_groupe is None:
+            print("No storage group is pointing to COS.")
+            sys.exit(1)
+
+        conn.execute(CREATE_TABLESPACE.format(TABLESPACE=tbspace, STORAGE_GROUP=storage_groupe))
+
+    except Exception as e:
+        print(e)
+
+
+
 def check_for_user_created_indexes(user_id, password, hostname, port, database,tablename,schemaname, dsn:str, enable_ssl: bool):
     import pyodbc
     try:
@@ -1062,3 +1104,4 @@ def check_for_user_created_indexes(user_id, password, hostname, port, database,t
            return False
     except Exception as e:
         print(e)
+
