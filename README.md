@@ -1,10 +1,10 @@
 # IBM Db2whmigratetocos
 
-IBM® Db2whmigratetocos is a tool used to migrate data between the block storage in the db2 warehouse instances to COS buckets. Once configured, you can trigger migrations through a command line interface installed in a virtual machine. You will also be able to track and monitor the active and completed migrations 
+IBM® Db2whmigratetocos is a tool used to migrate data between the block storage in the db2 warehouse instances and COS buckets. Once configured, you can trigger migrations through a command line interface installed in a virtual machine. You will also be able to track and monitor the active and completed migrations 
 
 **Note:**
 -   The IBM Db2whmigratetocos works with Db2 warehouse V3.0 and above, that has support to the Native COS feature
--   IBM Db2whmigratetocos can be run in the Virtual machine wiht Red Hat Enterprise Linux 9.x.
+-   IBM Db2whmigratetocos can be run in the Virtual machine with Red Hat Enterprise Linux 9.x.
 
 **Supported migration scenarios include:**
 
@@ -79,7 +79,7 @@ The db2whmigratetocos tool is in the form of a wheel package that can be install
 
 The .whl file is available in the /dist that can be used.
 
-If it needs to be built, ```use the wheel_build.sh```
+The ```db2whmigratetocos-0.0.1-py3-none-any.whl``` can be built using ```wheel_build.sh```
 
 2.Run Setup the db2whmigratetocos using the following command
 
@@ -220,6 +220,7 @@ Each run of the move command will generate a directory containing the logs and r
     -  ALLOW_READ_ACCESS - For Offline Admin Move Table, not providing this option will enable online data migration - Optional.
 - --runstats - To trigger external runstats after the table is moved
 - --log-directory-path - Pass the log directory base path to store the log files
+- --enable-ssl - Enable SSL for the connection
 
 Note: The move command needs to be run in nohup mode to make sure the process does not stop if the client connection in the VM gets disconnected
 
@@ -373,3 +374,29 @@ db2whmigratetocos status
 --user-id \<user-id\> --password \<password\> --hostname \<host-name\>
 ```
 
+**Move the tables concurrently with CSV input**
+
+The command moves tables tables listed in CSV files concurrently.
+
+- --dest_tablespace - OBJSTORESPACE1 - The destination tablespace in COS
+- --skip-schema - Skip a list of schema in the list - only used when the scope is schema
+- --skip-tbspace - Skip a list of tablespaces in the list - only used when the scope is tablespace
+- --csv-input - Give the generated CSV as input for the cmove command
+- --index-tbspace - The tablespace in block where indexes will be stored
+- --dsn - The DSN name if it is already configured
+- --copy-opts - To pass the copy options required for the tool
+    -  COPY_USE_OTA - Required  parameter should be provided
+    -  NO_STATS - If you don't want runstats to be run on the Moved table, If this option is not provided, runstats is collected as part of the Admin Move Table operation.- Optional
+    -  USE_ADC - Uses Automatic dictinary creation to create the dictionary/skipping uses sampling method to create dictionary - Optional
+    -  ALLOW_READ_ACCESS - For Offline Admin Move Table, not providing this option will enable online data migration - Optional.
+- --log-directory-path - Pass the log directory base path to store the log files
+- --runstats - To trigger external runstats after the table is moved
+- --enable-ssl - Enable SSL for the connection
+
+Command:
+```
+db2whmigratetocos cmove --hostname \<hostname\> --user-id \<user_id\> --password \<password\> 
+--database \<database\> --port \<port\> --log-directory-path \<path\> --csv-input \<path\> 
+--dsn \<dsn\> --dest-tbspace OBJSTORESPACE1 --index-tbspace USERSPACE1 --skip-schema \<schema\> 
+--skip-schema \<schema\> --skip-tbspace \<tablespace\> 
+```
