@@ -66,7 +66,7 @@ def execute_move(table_details: dict, params: dict, rr_callback: Callable):
     cmd = ["db2whmigratetocos", "move"] + move_params
 
     resp = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    return resp.stdout, resp.stderr
+    return resp
 
 
 @app.command()
@@ -74,7 +74,7 @@ def cmove(
     hostname: Annotated[str, typer.Option(help="Hostname of the Db2 warehouse Instance")],
     password: Annotated[str, typer.Option(help="Password of the User ID")],
     csv_input: Annotated[str, typer.Option(help="Input CSV file")],
-    log_directory_path: Annotated[str, typer.Option(help="Pass the log directory base path to store the log files")] = None,
+    log_directory_path: Annotated[str, typer.Option(help="Pass the log directory base path to store the log files")],
     database: Annotated[str, typer.Option(help="Database to be connected")] = "BLUDB",
     user_id: Annotated[str, typer.Option(help="User Id to connect to Db2 warehouse Instance")] = "db2inst1",
     port: Annotated[str, typer.Option(help="Port to be used for Db2 warehouse Instance")] = "50001",
@@ -121,7 +121,20 @@ def cmove(
             }
 
             for fut in as_completed(fututres):
-                console.print(fut.result())
+                res = fut.result()
+
+                if res.stderr:
+                    tab_det = fututres[fut]
+
+                    console.print(
+                        f"Something went wrong while moving table {tab_det['tablename']} of "
+                        f"schmea {tab_det['schema']}"
+                    )
+
+                    console.print(res.stderr)
+
+                else:
+                    console.print(res.stdout)
 
     else:
         console.print(f"{csv_input} is not a csv file.")
