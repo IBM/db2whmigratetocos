@@ -1071,13 +1071,26 @@ def create_tablespace(user_id: str, password: str, hostname: str, port: str, dat
         conn.execute(GET_STORAGE_PATH_DEFINED_IN_INSTANCE)
         rows = conn.fetchall()
 
-        storage_groupe = next((row[0] for row in rows if "DB2REMOTE" in row[1]), None)
+        storage_group = next((row[0] for row in rows if "DB2REMOTE" in row[1]), None)
 
-        if storage_groupe is None:
+        if storage_group is None:
             print("No storage group is pointing to COS.")
-            sys.exit(1)
+            sys.exit()
 
-        conn.execute(CREATE_TABLESPACE.format(TABLESPACE=tbspace, STORAGE_GROUP=storage_groupe))
+        conn.execute(GET_OBJECTSPACE_USING_SGNAME.format(SGNAME=storage_group))
+        rows = conn.fetchall()
+
+        if len(rows) > 16:
+
+            print(
+                f"The number of tablespaces in storage group '{storage_group}' are 16. "
+                f"New tablespace '{tbspace}' can not be created."
+            )
+
+            sys.exit()
+
+        conn.execute(CREATE_TABLESPACE.format(TABLESPACE=tbspace, STORAGE_GROUP=storage_group))
+        cnxn.commit()
 
     except Exception as e:
         print(e)
