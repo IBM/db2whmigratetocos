@@ -681,38 +681,21 @@ def move(
                                 f"schema {schema_name}. Check table and schema name."
                             )
 
-                            sys.exit(1)
+                            sys.exit()
 
-                        valid_tbspace_list = get_tablespaces_in_block_and_cos(
-                            user_id, password, hostname, port, database, valid_dsn, enable_ssl
+                        tables_in_tablespace = get_tabname_schemaname_under_tablespace_in_db2woc(
+                            user_id, password, hostname, port, database, dest_tbspace_list[0],
+                            valid_dsn, enable_ssl
                         )
 
-                        if dest_tbspace_list[0].lower() in (
-                            _tbspace.lower() for _tbspace in valid_tbspace_list
-                        ):
-                            # destination tablespace exists
+                        src_table_exists = (table_name.lower(), schema_name.lower()) in {
+                            tuple(map(str.lower, p)) for p in tables_in_tablespace
+                        }
 
-                            tables_in_tablespace = get_tabname_schemaname_under_tablespace_in_db2woc(
-                                user_id, password, hostname, port, database, dest_tbspace_list[0],
-                                valid_dsn, enable_ssl
-                            )
-
-                            src_table_exists = (table_name.lower(), schema_name.lower()) in {
-                                tuple(map(str.lower, p)) for p in tables_in_tablespace
-                            }
-
-                            # Source table exists in destination tablespace
-                            if src_table_exists:
-                                print(f"The table {table_name.lower()} already exists in the destination tablespace")
-                                sys.exit(1)
-
-                        else:
-                            # destination tablespace doesn't exist
-
-                            create_tablespace(
-                                user_id, password, hostname, port, database, dsn, enable_ssl,
-                                dest_tbspace_list[0]
-                            )
+                        # Source table exists in destination tablespace
+                        if src_table_exists:
+                            print(f"The table {table_name.lower()} already exists in the destination tablespace")
+                            sys.exit()
 
                         log_directory_name = create_a_log_directory_for_a_batch(log_directory_base_path)
 
@@ -727,9 +710,9 @@ def move(
                         if source_tablespace not in dest_tbspace_list:
                              move_the_tables(schema_name,table_name, source_tablespace, dest_tbspace_list[0], log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace_found,copy_opts,runstats)
                     else:
-                        print("The table name is not provided") 
+                        print("The table name is not provided")
                 else:
-                        print("The schema name is not provided") 
+                        print("The schema name is not provided")
         else:
             print("Kindly check if the Db2 warehouse Instance is up and runnning")
     except Exception as e:

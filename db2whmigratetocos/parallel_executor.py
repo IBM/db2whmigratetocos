@@ -1,5 +1,5 @@
 import subprocess
-
+import sys
 from typing import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -8,7 +8,7 @@ import typer
 from typing_extensions import Annotated
 from rich.console import Console
 
-from db2whmigratetocos.db2wh_db2_utilities import validate_and_get_df_from_the_csv
+from db2whmigratetocos.db2wh_db2_utilities import validate_and_get_df_from_the_csv, create_tablespace
 
 app = typer.Typer()
 console = Console()
@@ -55,7 +55,7 @@ def execute_move(table_details: dict, params: dict, rr_callback: Callable):
         if params[param]
     ]
 
-    dest_tbspace = params["dest_tbspace"].strip(",").split(",")[rr_callback()]
+    dest_tbspace = params["dest_tbspace"][rr_callback()]
 
     move_params.extend([
         "--dest-tbspace", dest_tbspace, "--scope", "table",
@@ -91,50 +91,55 @@ def cmove(
     Move tables concurrently.
     """
 
-    if Path(csv_input).suffix.lower() == ".csv":
-        csv_content = validate_and_get_df_from_the_csv(csv_input)
+    if Path(csv_input).suffix.lower() != ".csv":
+        console.print(f"{csv_input} is not a csv file.")
+        sys.exit()
 
-        params = {
-            "hostname": hostname,
-            "password": password,
-            "log_directory_path": log_directory_path,
-            "database": database,
-            "user_id": user_id,
-            "port": port,
-            "dsn": dsn,
-            "runstats": runstats,
-            "dest_tbspace": dest_tbspace,
-            "index_tbspace": index_tbspace,
-            "copy_opts": copy_opts,
-            "skip_schema": skip_schema,
-            "skip_tbspace": skip_tbspace,
-            "enable_ssl": enable_ssl
+    csv_content = validate_and_get_df_from_the_csv(csv_input)
+    _dest_tbspace = list(map(lambda ele: ele.upper(), dest_tbspace.strip(",").split(",")))
+    skipped_tbspaces = create_tablespace(user_id, password, hostname, port, database, dsn, enable_ssl, _dest_tbspace)
+    available_tbspaces = list(set(_dest_tbspace) - set(skipped_tbspaces))
+
+    params = {
+        "hostname": hostname,
+        "password": password,
+        "log_directory_path": log_directory_path,
+        "database": database,
+        "user_id": user_id,
+        "port": port,
+        "dsn": dsn,
+        "runstats": runstats,
+        "dest_tbspace": available_tbspaces,
+        "index_tbspace": index_tbspace,
+        "copy_opts": copy_opts,
+        "skip_schema": skip_schema,
+        "skip_tbspace": skip_tbspace,
+        "enable_ssl": enable_ssl
+    }
+
+    get_index = round_robin_counter(len(_dest_tbspace))
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+
+        fututres = {
+            executor.submit(execute_move, tab_det, params, get_index) : tab_det
+            for tab_det in csv_content
         }
 
-        get_index = round_robin_counter(len(dest_tbspace.strip(",").split(",")))
+        for fut in as_completed(fututres):
+            res = fut.result()
 
-        with ThreadPoolExecutor(max_workers=10) as executor:
+            console.print("-------------------------------------------------------------")
 
-            fututres = {
-                executor.submit(execute_move, tab_det, params, get_index) : tab_det
-                for tab_det in csv_content
-            }
+            if res.stderr:
+                tab_det = fututres[fut]
 
-            for fut in as_completed(fututres):
-                res = fut.result()
+                console.print(
+                    f"Something went wrong while moving table {tab_det['tablename']} of "
+                    f"schmea {tab_det['schema']}"
+                )
 
-                if res.stderr:
-                    tab_det = fututres[fut]
+                console.print(res.stderr)
 
-                    console.print(
-                        f"Something went wrong while moving table {tab_det['tablename']} of "
-                        f"schmea {tab_det['schema']}"
-                    )
-
-                    console.print(res.stderr)
-
-                else:
-                    console.print(res.stdout)
-
-    else:
-        console.print(f"{csv_input} is not a csv file.")
+            else:
+                console.print(res.stdout)

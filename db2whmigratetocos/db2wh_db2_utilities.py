@@ -1042,8 +1042,8 @@ def get_list_of_objectspaces(user_id, password, hostname, port, database, dsn:st
         print(e)
 
 
-def create_tablespace(user_id: str, password: str, hostname: str, port: str, database: str, dsn:str, enable_ssl: bool, tbspace: str):
-    """Creates tablespace
+def create_tablespace(user_id: str, password: str, hostname: str, port: str, database: str, dsn:str, enable_ssl: bool, tbspaces: list) -> list:
+    """Creates tablespaces if are not already available.
 
     Parameters
     ----------
@@ -1071,26 +1071,52 @@ def create_tablespace(user_id: str, password: str, hostname: str, port: str, dat
         conn.execute(GET_STORAGE_PATH_DEFINED_IN_INSTANCE)
         rows = conn.fetchall()
 
-        storage_group = next((row[0] for row in rows if "DB2REMOTE" in row[1]), None)
+        storage_group = next((row[0] for row in rows if "DB2REMOTE" in row[1].upper()), None)
 
         if storage_group is None:
-            print("No storage group is pointing to COS.")
+            console.print("No storage group is pointing to COS.")
             sys.exit()
 
         conn.execute(GET_OBJECTSPACE_USING_SGNAME.format(SGNAME=storage_group))
         rows = conn.fetchall()
 
-        if len(rows) > 16:
+        available_tbspaces = [tup[0].upper() for tup in rows]
+        nos_avl_tbspaces = len(available_tbspaces)
 
-            print(
+        unavailable_tbspaces = list(set(tbspaces) - set(available_tbspaces))
+
+        if not unavailable_tbspaces:
+            console.print(f"All the tablespaces '{', '.join(tbspaces)}' are available")
+            return []
+
+        if nos_avl_tbspaces == 16:
+
+            console.print(
                 f"The number of tablespaces in storage group '{storage_group}' are 16. "
-                f"New tablespace '{tbspace}' can not be created."
+                f"New tablespaces '{', '.join(tbspaces)}' can not be created."
             )
 
             sys.exit()
 
-        conn.execute(CREATE_TABLESPACE.format(TABLESPACE=tbspace, STORAGE_GROUP=storage_group))
-        cnxn.commit()
+        console.print("Creating tablespaces that are not available.")
+
+        for idx, tbspace in enumerate(unavailable_tbspaces):
+
+            if nos_avl_tbspaces == 16:
+
+                console.print(
+                    f"The number of tablespaces in storage group '{storage_group}' are 16. "
+                    f"Tablespaces '{', '.join(unavailable_tbspaces[idx:])}' can not be created. "
+                    f"Tables will be moved to tablespaces '{', '.join(unavailable_tbspaces[:idx])}'"
+                )
+
+                return unavailable_tbspaces[idx:]
+
+            conn.execute(CREATE_TABLESPACE.format(TABLESPACE=tbspace, STORAGE_GROUP=storage_group))
+            cnxn.commit()
+            nos_avl_tbspaces += 1
+
+        return []
 
     except Exception as e:
         print(e)
