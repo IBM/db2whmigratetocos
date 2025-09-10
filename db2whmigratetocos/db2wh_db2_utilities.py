@@ -210,7 +210,7 @@ def tab_size_by_table_name(user: str, password: str, hostname: str, port: str, d
         rows = conn.fetchall()
         cnxn.close()
         for item in rows:
-            return int(item[0])+int(item[1])+int(item[2])+int(item[3])+int(item[4])+int(item[5])
+            return int(item[0])+int(item[1])+int(item[2])+int(item[3])+int(item[4])
     except Exception as e:
         print(e)
 
@@ -268,7 +268,7 @@ def get_parent_table(table, schema, object_space_list, fetch_details, cursor):
         if fetch_details:
             cursor.execute(TAB_SIZE.format(TABSCHEMA=schema_name, TABNAME=table_name))
             data = cursor.fetchone()
-            size = str(data[0] + data[1] + data[2] + data[3] + data[4] + data[5])
+            size = str(data[0] + data[1] + data[2] + data[3] + data[4])
 
         storage = "cos" if tablespace in object_space_list else "block-storage"
 
@@ -287,7 +287,6 @@ def get_tables_parent_tables(tables_list: List[tuple], object_space_list, fetch_
 
     conn = pyodbc.connect(connection_string)
     cur = conn.cursor()
-
     all_tables = set(tables_list)
     queue = deque(tables_list)
 
@@ -813,7 +812,7 @@ def move_the_tables(schema, tablename, source_tablespace, dest_tbspace, log_dire
         with open(log_directory_name+"/"+report_file_name_for_the_table, 'w', encoding='utf-8') as f:
             json.dump(migration_table_details, f, indent=6)
     if std_log_creation_done:
-        print("Table Name " + tablename)
+        print(f"Table : '{tablename}', Schema: '{schema}', Source Tablespace: '{source_tablespace}'")
         print("Migration ID " + migration_job_id)
         print("Reports in " + log_directory_name +
               "/"+report_file_name_for_the_table)

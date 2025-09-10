@@ -209,7 +209,7 @@ def fetch(
                                             tb_table.add_row(
                                                 table[0], table[1])
                                         tables_list_in_tablespaces.append(
-                                            [tbspace, table[0], table[1]," ",str(tbspace_store)])
+                                            (tbspace, table[0], table[1]," ",str(tbspace_store)))
                                     print()
                                     console.print(tb_table)
                                 else:
@@ -285,7 +285,7 @@ def fetch(
                                             sc_table.add_row(
                                                 table[0], str(table[1]))
                                         tables_in_schema.append(
-                                            [table_tablespace, table[0], schema, table[1], str(tbspace_store)])
+                                            (table_tablespace, table[0], schema, table[1], str(tbspace_store)))
                                     console.print(sc_table)
                                 else:
                                     print()
@@ -337,7 +337,7 @@ def fetch(
                                             sc_table.add_row(
                                                 table[0],schema)
                                         tables_in_schema.append(
-                                            [table_tablespace, table[0], schema," ",str(tbspace_store)])
+                                            (table_tablespace, table[0], schema," ",str(tbspace_store)))
                                     console.print(sc_table)
                                 else:
                                     print()

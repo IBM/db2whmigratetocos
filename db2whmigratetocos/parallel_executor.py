@@ -85,7 +85,8 @@ def cmove(
     copy_opts: Annotated[str, typer.Option(help="Copy options to be passed.")] = "COPY_USE_OTA,NO_STATS",
     skip_schema: Annotated[str, typer.Option(help="Skips an individual schema or a set of schmeas in the list of source tablespaces")] = None,
     skip_tbspace: Annotated[str, typer.Option(help="Source tablespaces in block that needs to be skipped - none/comma seperated list of tablespaces")] =None,
-    enable_ssl: Annotated[bool, typer.Option(help="Enable SSL encryption for the database connection.")] = False
+    enable_ssl: Annotated[bool, typer.Option(help="Enable SSL encryption for the database connection.")] = False,
+    workers: Annotated[int, typer.Option(help="Number of worker threads to use", min=1)] = 1
 ):
     """
     Move tables concurrently.
@@ -119,7 +120,7 @@ def cmove(
 
     get_index = round_robin_counter(len(_dest_tbspace))
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=workers) as executor:
 
         fututres = {
             executor.submit(execute_move, tab_det, params, get_index) : tab_det
