@@ -122,18 +122,18 @@ def cmove(
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
 
-        fututres = {
+        futures = {
             executor.submit(execute_move, tab_det, params, get_index) : tab_det
             for tab_det in csv_content
         }
 
-        for fut in as_completed(fututres):
+        for fut in as_completed(futures):
             res = fut.result()
 
             console.print("-------------------------------------------------------------")
 
             if res.stderr:
-                tab_det = fututres[fut]
+                tab_det = futures[fut]
 
                 console.print(
                     f"Something went wrong while moving table {tab_det['tablename']} of "
