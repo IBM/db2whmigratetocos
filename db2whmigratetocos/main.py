@@ -16,7 +16,7 @@ import pandas as pd
 import typer
 from db2whmigratetocos.admin_move_table_func import cancel_terminate_admin_move_table
 from db2whmigratetocos.constants import COPY_OPTIONS, STATUS_TABLE_HEADER, STATUS_TABLE_HEADER_ACTIVE_RUNS
-from db2whmigratetocos.db2wh_db2_utilities import check_for_user_created_indexes, check_home_path, check_if_logs_path_exist_else_create, create_a_log_directory_for_a_batch, db2wh_pyodbc_connection, export_the_data_as_csv, get_list_of_objectspaces, get_schema_in_instance, get_tables_cnt_under_tablespaces, get_tables_under_schem_notabsize_in_db2woc, get_tables_under_schema_in_db2woc, get_tables_under_tablespace_in_db2woc, get_tables_under_tablespace_no_tabsize_in_db2woc, get_tablespaces_in_block_and_cos, get_tabname_schemaname_under_tablespace_in_db2woc, get_tbpsace_name_for_table, list_migration_runs, move_the_tables, parse_the_json_files_for_status, print_export_tables_in_block_and_cos, print_table_row, validate_and_get_df_from_the_csv, validate_the_input_db2_objects
+from db2whmigratetocos.db2wh_db2_utilities import check_for_user_created_indexes, check_home_path, check_if_logs_path_exist_else_create, create_a_log_directory_for_a_batch, create_tablespace, db2wh_pyodbc_connection, export_the_data_as_csv, get_list_of_objectspaces, get_schema_in_instance, get_tables_cnt_under_tablespaces, get_tables_parent_tables, get_tables_under_schem_notabsize_in_db2woc, get_tables_under_schema_in_db2woc, get_tables_under_tablespace_in_db2woc, get_tables_under_tablespace_no_tabsize_in_db2woc, get_tablespaces_in_block_and_cos, get_tabname_schemaname_under_tablespace_in_db2woc, get_tbpsace_name_for_table, list_migration_runs, move_the_tables, parse_the_json_files_for_status, print_export_tables_in_block_and_cos, print_table_row, validate_and_get_df_from_the_csv, validate_the_input_db2_objects
 from .db2whmigratetocos_install_prereq import db2whmigratetocos_init
 
 app = typer.Typer()
@@ -52,7 +52,7 @@ def setup():
 
 
 @app.command()
-def list(
+def fetch(
         user_id: Annotated[str, typer.Option(help="User Id to connect to Db2 warehouse Instance")],
         password: Annotated[str, typer.Option(help="Password of the User ID")],
         hostname: Annotated[str, typer.Option(help="Hostname of the Db2 warehouse Instance")],
@@ -60,7 +60,7 @@ def list(
             help="Pass the DSN name if it is already configured")] = None,
         scope: Annotated[str, typer.Option(
             help="List the tables by tablespace/schema")] = "tablespace",
-        list: Annotated[str, typer.Option(
+        objects: Annotated[str, typer.Option(
             help="all (or) list of tablespaces/schemas")] = "all",
         detail: Annotated[bool, typer.Option(
             help="List tables with its schema & size- true/false")] = False,
@@ -68,7 +68,8 @@ def list(
             help="Export the table data into a CSV")] = False,
         database: Annotated[str, typer.Option(
             help="Database to be connected")] = "BLUDB",
-        port: Annotated[str, typer.Option(help="Port to be used for Db2 warehouse Instance")] = "50001"):
+        port: Annotated[str, typer.Option(help="Port to be used for Db2 warehouse Instance")] = "50001",
+        enable_ssl: Annotated[bool, typer.Option(help="Enable SSL encryption for the database connection.")] = False):
     """
     List the tables in tablespaces/schemas with size
     \n
@@ -97,20 +98,20 @@ def list(
         if dsn is not None:
          valid_dsn = dsn
          conn_status = db2wh_pyodbc_connection(
-            user_id, password, hostname, port, database, True,valid_dsn)
+            user_id, password, hostname, port, database, True, valid_dsn, enable_ssl)
         else:
             valid_dsn = None
             conn_status = db2wh_pyodbc_connection(
-            user_id, password, hostname, port, database, True,valid_dsn)
+            user_id, password, hostname, port, database, True, valid_dsn, enable_ssl)
         print()
         if conn_status:
             tablespace_list = []
             schema_list = []
-            input_obj_list = list.split(",")
+            input_obj_list = objects.split(",")
             all_objects = 'all' if 'all' in input_obj_list else None
             try:
                 valid_tablespace_list = get_tablespaces_in_block_and_cos(
-                    user_id, password, hostname, port, database,valid_dsn)
+                    user_id, password, hostname, port, database, valid_dsn, enable_ssl)
             except Exception as e:
                 print(
                     "unable to fetch the tablespaces, check if the instance is up and running")
@@ -118,7 +119,7 @@ def list(
             if scope == "tablespace":
                 print()
                 console.print("Listing the tablespaces")
-                object_space_list = get_list_of_objectspaces(user_id,password,hostname,port,database,valid_dsn)
+                object_space_list = get_list_of_objectspaces(user_id,password,hostname,port,database,valid_dsn,enable_ssl)
                 # validating the tablespace list
                 if all_objects == 'all':
                     tablespace_list = valid_tablespace_list
@@ -145,7 +146,7 @@ def list(
                                 console.rule(
                                     f"[bold orange4 italic]Tables in Tablespace - {tbspace}")
                                 total_estimate, tables, table_cnt = get_tables_under_tablespace_in_db2woc(
-                                    user_id, password, hostname, port, database, tbspace,valid_dsn)
+                                    user_id, password, hostname, port, database, tbspace, valid_dsn, enable_ssl)
                                 tb_table = Table()
                                 tb_table.add_column(
                                     "Tablename", justify="center", style="cyan")
@@ -165,16 +166,22 @@ def list(
                                             tb_table.add_row(
                                                 table[0], table[1], str(table[2]))
                                         tables_list_in_tablespaces.append(
-                                            [tbspace, table[0], table[1], str(table[2]), str(tbspace_store)])
+                                            (tbspace, table[0], table[1], str(table[2]), str(tbspace_store)))
                                     print()
                                     console.print(tb_table)
                                 else:
                                     print()
                                     console.print(
                                         "No tables found in the tablespace")
+
+                            ordered = get_tables_parent_tables(tables_list_in_tablespaces,
+                                                     object_space_list, detail, user_id, password,
+                                                     hostname, port, database, valid_dsn, enable_ssl
+                                                     )
+
                             if export_csv is True:
                                filename =  export_the_data_as_csv(
-                                    tables_list_in_tablespaces, "db2whmigratetocos-tables-list-")
+                                    ordered, "db2whmigratetocos-tables-list-")
                                return filename
                         else:
                             tables_list_in_tablespaces = []
@@ -186,7 +193,7 @@ def list(
                                 console.rule(
                                     f"[bold orange4 italic]Tables in Tablespace - {tbspace}")
                                 tables, table_cnt = get_tables_under_tablespace_no_tabsize_in_db2woc(
-                                    user_id, password, hostname, port, database, tbspace,valid_dsn)
+                                    user_id, password, hostname, port, database, tbspace, valid_dsn, enable_ssl)
                                 tb_table = Table()
                                 tb_table.add_column(
                                     "Tablename", justify="center", style="cyan")
@@ -202,16 +209,22 @@ def list(
                                             tb_table.add_row(
                                                 table[0], table[1])
                                         tables_list_in_tablespaces.append(
-                                            [tbspace, table[0], table[1]," ",str(tbspace_store)])
+                                            (tbspace, table[0], table[1]," ",str(tbspace_store)))
                                     print()
                                     console.print(tb_table)
                                 else:
                                     print()
                                     console.print(
                                         "No tables found in the tablespace")
+
+                            ordered = get_tables_parent_tables(tables_list_in_tablespaces,
+                                                     object_space_list, detail, user_id, password,
+                                                     hostname, port, database, valid_dsn, enable_ssl
+                                                     )
+
                             if export_csv is True:
                                filename =  export_the_data_as_csv(
-                                    tables_list_in_tablespaces, "db2whmigratetocos-tables-list-nodetail-")
+                                    ordered, "db2whmigratetocos-tables-list-nodetail-")
                                return filename
                     else:
                         print()
@@ -220,7 +233,7 @@ def list(
                 console.print(f"Listing the {scope}")
                 try:
                     valid_schema_list = get_schema_in_instance(
-                        user_id, password, hostname, port, database,valid_dsn)
+                        user_id, password, hostname, port, database, valid_dsn, enable_ssl)
                 except Exception as e:
                     print(e)
                     print(
@@ -242,14 +255,14 @@ def list(
                                 "Displaying till 75 tables for each schema")
                             print()
                             tables_in_schema = []
-                            object_space_list = get_list_of_objectspaces(user_id,password,hostname,port,database,valid_dsn)
+                            object_space_list = get_list_of_objectspaces(user_id,password,hostname,port,database,valid_dsn,enable_ssl)
 
                             for schema in schema_list:
                                 print()
                                 console.rule(
                                     f"[bold orange4 italic]Tables in Schema - {schema}")
                                 table_cnt, total_estimate, tables = get_tables_under_schema_in_db2woc(
-                                    user_id, password, hostname, port, database, schema,valid_dsn)
+                                    user_id, password, hostname, port, database, schema, valid_dsn, enable_ssl)
                                 sc_table = Table()
                                 sc_table.add_column(
                                     "Tablename", justify="center", style="cyan")
@@ -264,7 +277,7 @@ def list(
                                     for table in tables:
                                         tbspace_store = ""
                                         table_tablespace = get_tbpsace_name_for_table(
-                                            user_id, password, hostname, port, database, table[0], schema,valid_dsn)
+                                            user_id, password, hostname, port, database, table[0], schema, valid_dsn, enable_ssl)
                                         if len(object_space_list) != 0:
                                                  tbspace_store = "cos" if table_tablespace in object_space_list else "block-storage"
                                         count = count+1
@@ -272,13 +285,19 @@ def list(
                                             sc_table.add_row(
                                                 table[0], str(table[1]))
                                         tables_in_schema.append(
-                                            [table_tablespace, table[0], schema, table[1], str(tbspace_store)])
+                                            (table_tablespace, table[0], schema, table[1], str(tbspace_store)))
                                     console.print(sc_table)
                                 else:
                                     print()
                                     console.print(
                                         "No tables found in the schema")
                                     print()
+
+                            ordered = get_tables_parent_tables(tables_list_in_tablespaces,
+                                                     object_space_list, detail, user_id, password,
+                                                     hostname, port, database, valid_dsn, enable_ssl
+                                                     )
+
                             if export_csv is True:
                                 filename = export_the_data_as_csv(
                                     tables_in_schema, "db2whmigratetocos-schemas-tables-list-")
@@ -291,13 +310,13 @@ def list(
                                 "Displaying till 75 tables for each schema")
                             print()
                             tables_in_schema = []
-                            object_space_list = get_list_of_objectspaces(user_id,password,hostname,port,database,valid_dsn)
+                            object_space_list = get_list_of_objectspaces(user_id,password,hostname,port,database,valid_dsn,enable_ssl)
                             for schema in schema_list:
                                 print()
                                 console.rule(
                                     f"[bold orange4 italic]Tables in Schema - {schema}")
                                 table_cnt,tables = get_tables_under_schem_notabsize_in_db2woc(
-                                    user_id, password, hostname, port, database, schema,valid_dsn)
+                                    user_id, password, hostname, port, database, schema, valid_dsn, enable_ssl)
                                 sc_table = Table()
                                 sc_table.add_column(
                                     "Tablename", justify="center", style="cyan")
@@ -310,7 +329,7 @@ def list(
                                     for table in tables:
                                         tbspace_store = ""
                                         table_tablespace = get_tbpsace_name_for_table(
-                                            user_id, password, hostname, port, database, table[0], schema,valid_dsn)
+                                            user_id, password, hostname, port, database, table[0], schema, valid_dsn, enable_ssl)
                                         if len(object_space_list) != 0:
                                                  tbspace_store = "cos" if table_tablespace in object_space_list else "block-storage"
                                         count = count+1
@@ -318,13 +337,19 @@ def list(
                                             sc_table.add_row(
                                                 table[0],schema)
                                         tables_in_schema.append(
-                                            [table_tablespace, table[0], schema," ",str(tbspace_store)])
+                                            (table_tablespace, table[0], schema," ",str(tbspace_store)))
                                     console.print(sc_table)
                                 else:
                                     print()
                                     console.print(
                                         "No tables found in the schema")
                                     print()
+
+                            ordered = get_tables_parent_tables(tables_list_in_tablespaces,
+                                                     object_space_list, detail, user_id, password,
+                                                     hostname, port, database, valid_dsn, enable_ssl
+                                                     )
+
                             if export_csv is True:
                                 filename = export_the_data_as_csv(
                                     tables_in_schema, "db2whmigratetocos-schemas-tables-list-nodetail")
@@ -336,6 +361,8 @@ def list(
             print(
                 "Cannot connect to the Instance. Kindly check if the status if up and running")
     except Exception as e:
+        import traceback
+        print(traceback.format_exc())
         print(e)
 
 
@@ -343,7 +370,7 @@ def list(
 def move(
         password: Annotated[str, typer.Option(help="Password of the User ID")],
         hostname: Annotated[str, typer.Option(help="Hostname of the Db2 warehouse Instance")],
-        list: Annotated[str, typer.Option(
+        objects: Annotated[str, typer.Option(
             help="Source tablespace/schema in block storage - all/comma seperated list of tablespace/schema")] = None,
         csv_input: Annotated[str, typer.Option(
             help="CSV file as input to the move command as .csv file without the path")] = None,
@@ -356,15 +383,15 @@ def move(
         schema_name: Annotated[str, typer.Option(
             help="Provide the schema name when moving a single table")] = None,
         runstats: Annotated[bool, typer.Option(
-            help="Provide the schema name when moving a single table")] = False,
+            help="Execute RUNSTAT command")] = False,
         table_name: Annotated[str, typer.Option(
             help="Move tables by tablespace/schema")] = None,
         dest_tbspace: Annotated[str, typer.Option(
             help="Destination tablespace in cos, where the data needs to be moved ")] = "OBJSTORESPACE1",
         index_tbspace : Annotated[str, typer.Option(
-            help="Destination tablespace in cos, where the data needs to be moved ")] = None,
+            help="Destination index tablespace in cos, where the index needs to be moved ")] = None,
         copy_opts: Annotated[str, typer.Option(
-            help="Destination tablespace in cos, where the data needs to be moved ")] = "COPY_USE_OTA,NO_STATS",
+            help="Copy options to be passed.")] = "COPY_USE_OTA,NO_STATS",
         user_id: Annotated[str, typer.Option(
             help="User Id to connect to Db2 warehouse Instance")] = "db2inst1",
         skip_schema: Annotated[str, typer.Option(
@@ -373,7 +400,8 @@ def move(
             help="Source tablespaces in block that needs to be skipped - none/comma seperated list of tablespaces")] =None,
         database: Annotated[str, typer.Option(
             help="Database to be connected")] = "BLUDB",
-        port: Annotated[str, typer.Option(help="Port to be used for Db2 warehouse Instance")] = "50001"):
+        port: Annotated[str, typer.Option(help="Port to be used for Db2 warehouse Instance")] = "50001",
+        enable_ssl: Annotated[bool, typer.Option(help="Enable SSL encryption for the database connection.")] = False):
         
     """
     Move the tablespaces to COS from Block
@@ -409,11 +437,11 @@ def move(
         if dsn is not None:
          valid_dsn = dsn
          conn_test = db2wh_pyodbc_connection(
-            user_id, password, hostname, port, database, True,dsn)
+            user_id, password, hostname, port, database, True, dsn, enable_ssl)
         else:
          valid_dsn = None
          conn_test = db2wh_pyodbc_connection(
-            user_id, password, hostname, port, database, True,valid_dsn)
+            user_id, password, hostname, port, database, True, valid_dsn, enable_ssl)
         log_directory_base_path = " "
         if log_directory_path is not None:
             log_directory_base_path = log_directory_path+"/db2whmigratetocos-logs"
@@ -422,10 +450,10 @@ def move(
                 os.makedirs(log_directory_base_path, exist_ok=True)
         else:
             print("Please provide the logs directory to be used to create logs\n")  
-            sys.exit(0)          
+            sys.exit(0)
         print()
         console.print("Test Connect to the Db2 warehouse instance")
-        object_space_list = get_list_of_objectspaces(user_id,password,hostname,port,database,valid_dsn)
+        object_space_list = get_list_of_objectspaces(user_id,password,hostname,port,database,valid_dsn,enable_ssl)
         if conn_test:
             valid_copy_opts = True
             if copy_opts is not None:
@@ -437,11 +465,11 @@ def move(
                         sys.exit(0)
             if valid_copy_opts is True:
                 print("The copy options are  valid - " + copy_opts)
-            if list is None and csv_input is None and scope != "table":
+            if objects is None and csv_input is None and scope != "table":
                 print("The list provided is empty. Kindly give all or a list of tablespaces/schemas")
                 sys.exit(0)
-            if list is not None:
-             src_db2_obj_list = list.split(",")
+            if objects is not None:
+             src_db2_obj_list = objects.split(",")
             if skip_tbspace is not None:
                skip_tbspace_list = skip_tbspace.split(",")
             else:
@@ -467,18 +495,18 @@ def move(
                     sys.exit(0)
             if scope == "tablespace":
                 valid_tbspace_list = get_tablespaces_in_block_and_cos(
-                    user_id, password, hostname, port, database,valid_dsn)
+                    user_id, password, hostname, port, database, valid_dsn, enable_ssl)
                 if csv_input is not None:
                     tables_in_df = validate_and_get_df_from_the_csv(
                         csv_input)
-                    if len(tables_in_df) > 1:
+                    if len(tables_in_df) > 0:
                         log_directory_name = create_a_log_directory_for_a_batch(log_directory_base_path)
                         for idx, row in enumerate(tables_in_df):
                             if row['tablespace'] in valid_tbspace_list:
                                 if row['tablespace'] not in skip_tbspace_list:
                                     if row['tablespace'] not in dest_tbspace_list:
                                         tables_in_tablespace = get_tabname_schemaname_under_tablespace_in_db2woc(
-                                            user_id, password, hostname, port, database, row['tablespace'],valid_dsn)
+                                            user_id, password, hostname, port, database, row['tablespace'], valid_dsn, enable_ssl)
                                         table_exists = False
                                         for item in tables_in_tablespace:
                                             if row['tablename'] == item[0]:
@@ -487,7 +515,7 @@ def move(
                                             selected_dest_tbspace = idx % len(
                                                 dest_tbspace_list)
                                             if index_tbspace is None:
-                                                index = check_for_user_created_indexes(user_id,password,hostname,port,database,row['tablename'],row['schema'],valid_dsn)
+                                                index = check_for_user_created_indexes(user_id,password,hostname,port,database,row['tablename'],row['schema'],valid_dsn, enable_ssl)
                                                 if index is True:
                                                     index_tbspace_found = "USERSPACE1"
                                                 else:
@@ -495,7 +523,7 @@ def move(
                                             else:
                                                 index_tbspace_found = index_tbspace
                                             move_the_tables(row['schema'], row['tablename'], row['tablespace'], dest_tbspace_list[selected_dest_tbspace],
-                                                            log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace_found,runstats)
+                                                            log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace_found,copy_opts,runstats)
                                         else:
                                             print(
                                                 "Table not found in the tablespace")
@@ -510,7 +538,7 @@ def move(
                     else:
                         print("The CSV is empty")
                 else:
-                    if list is not None:
+                    if objects is not None:
                         all_tablespaces = 'all' if 'all' in src_db2_obj_list else None
                         if all_tablespaces == 'all':
                             tbspace_list = valid_tbspace_list
@@ -523,7 +551,7 @@ def move(
                             if tbspace not in skip_tbspace_list:
                                 if tbspace not in dest_tbspace_list:
                                     tables_in_userspace = get_tabname_schemaname_under_tablespace_in_db2woc(
-                                        user_id, password, hostname, port, database, tbspace,valid_dsn)
+                                        user_id, password, hostname, port, database, tbspace, valid_dsn, enable_ssl)
                                     print(
                                         "Initiating the migration for each of the table, proceeding with next steps....")
                                     tables_cnt = len(tables_in_userspace)
@@ -531,8 +559,8 @@ def move(
                                         for idx, items in enumerate(tables_in_userspace):
                                             selected_dest_tbspace = idx % len(
                                                 dest_tbspace_list)
-                                            if index_tbspace is not None:   
-                                                index = check_for_user_created_indexes(user_id,password,hostname,port,database,items[0],items[1],valid_dsn)
+                                            if index_tbspace is None:   
+                                                index = check_for_user_created_indexes(user_id,password,hostname,port,database,items[0],items[1],valid_dsn, enable_ssl)
                                                 if index is True:
                                                     index_tbspace_found = "USERSPACE1"
                                                 else:
@@ -551,20 +579,20 @@ def move(
                         print("The provided list is empty. Try giving all/ List of tablespaces/schemas in the list")
             if scope == "schema":
                 valid_schema_list = get_schema_in_instance(
-                    user_id, password, hostname, port, database,valid_dsn)
+                    user_id, password, hostname, port, database, valid_dsn, enable_ssl)
                 if valid_schema_list is not None:
                     if csv_input != None:
                         tables_in_df = validate_and_get_df_from_the_csv(
                             csv_input)
-                        if len(tables_in_df) > 1:
+                        if len(tables_in_df) > 0:
                             log_directory_name = create_a_log_directory_for_a_batch(log_directory_base_path)
                             for idx, row in enumerate(tables_in_df):
                                 if row['schema'] in valid_schema_list:
                                     if row['schema'] not in skip_schema_list:
                                         source_tablespace = get_tbpsace_name_for_table(
-                                            user_id, password, hostname, port, database, row['tablename'], row['schema'],valid_dsn)
+                                            user_id, password, hostname, port, database, row['tablename'], row['schema'], valid_dsn, enable_ssl)
                                         tables_cnt,size,tables_in_schema = get_tables_under_schema_in_db2woc(
-                                            user_id, password, hostname, port, database, row['schema'])
+                                            user_id, password, hostname, port, database, row['schema'], valid_dsn, enable_ssl)
                                         table_exists = False
                                         for item in tables_in_schema:
                                             if row['tablename'] == item[0]:
@@ -572,8 +600,8 @@ def move(
                                         if table_exists:
                                             selected_dest_tbspace = idx % len(dest_tbspace_list)
                                             if source_tablespace not in dest_tbspace_list:
-                                                if index_tbspace is not None:  
-                                                    index = check_for_user_created_indexes(user_id,password,hostname,port,database,row['tablename'],row['schema'],valid_dsn)
+                                                if index_tbspace is None:  
+                                                    index = check_for_user_created_indexes(user_id,password,hostname,port,database,row['tablename'],row['schema'],valid_dsn,enable_ssl)
                                                     if index is True:
                                                         index_tbspace_found = "USERSPACE1"
                                                     else:
@@ -597,7 +625,7 @@ def move(
                         else:
                             print("The CSV is empty")
                     else:
-                        if list is not None:
+                        if objects is not None:
                             all_schemas = 'all' if 'all' in src_db2_obj_list else None
                              # validation of schema and setting the list for movment
                             if all_schemas == 'all':
@@ -609,7 +637,7 @@ def move(
                                 tables_in_schema = []
                                 if schema not in skip_schema_list:
                                     tables_cnt, tota_size, tables_in_schema = get_tables_under_schema_in_db2woc(
-                                        user_id, password, hostname, port, database, schema,valid_dsn)
+                                        user_id, password, hostname, port, database, schema, valid_dsn, enable_ssl)
                                     print(
                                         "Initiating the migration for each of the table, proceeding with next steps....")
                                     if len(tables_in_schema) != 0:
@@ -617,9 +645,9 @@ def move(
                                         for idx, item in enumerate(tables_in_schema):
                                             selected_dest_tbspace = idx % len(dest_tbspace_list)
                                             source_tablespace = get_tbpsace_name_for_table(
-                                                user_id, password, hostname, port, database, item[0], schema,valid_dsn)
-                                            if index_tbspace is not None:
-                                                index = check_for_user_created_indexes(user_id,password,hostname,port,database,item[0],schema,valid_dsn)
+                                                user_id, password, hostname, port, database, item[0], schema, valid_dsn, enable_ssl)
+                                            if index_tbspace is None:
+                                                index = check_for_user_created_indexes(user_id,password,hostname,port,database,item[0],schema,valid_dsn,enable_ssl)
                                                 if index is True:
                                                     index_tbspace_found = "USERSPACE1" 
                                                 else:
@@ -640,10 +668,39 @@ def move(
             if scope == "table":
                 if schema_name is not None:
                     if table_name is not None:
+
+                        source_tablespace = get_tbpsace_name_for_table(
+                            user_id, password, hostname, port, database, table_name, schema_name,
+                            valid_dsn, enable_ssl
+                        )
+
+                        if source_tablespace == " ":
+
+                            print(
+                                f"Unable to resolve tablespace for table {table_name} in "
+                                f"schema {schema_name}. Check table and schema name."
+                            )
+
+                            sys.exit()
+
+                        tables_in_tablespace = get_tabname_schemaname_under_tablespace_in_db2woc(
+                            user_id, password, hostname, port, database, dest_tbspace_list[0],
+                            valid_dsn, enable_ssl
+                        )
+
+                        src_table_exists = (table_name.lower(), schema_name.lower()) in {
+                            tuple(map(str.lower, p)) for p in tables_in_tablespace
+                        }
+
+                        # Source table exists in destination tablespace
+                        if src_table_exists:
+                            print(f"The table {table_name.lower()} already exists in the destination tablespace")
+                            sys.exit()
+
                         log_directory_name = create_a_log_directory_for_a_batch(log_directory_base_path)
-                        source_tablespace = get_tbpsace_name_for_table(user_id, password, hostname, port, database,table_name, schema_name,valid_dsn)
-                        if index_tbspace is not None:
-                            index = check_for_user_created_indexes(user_id,password,hostname,port,database,table_name,schema_name,valid_dsn)
+
+                        if index_tbspace is None:
+                            index = check_for_user_created_indexes(user_id,password,hostname,port,database,table_name,schema_name,valid_dsn,enable_ssl)
                             if index is True:
                                 index_tbspace_found = "USERSPACE1"
                             else:
@@ -653,9 +710,9 @@ def move(
                         if source_tablespace not in dest_tbspace_list:
                              move_the_tables(schema_name,table_name, source_tablespace, dest_tbspace_list[0], log_directory_name, user_id, password, hostname, port, database,valid_dsn,index_tbspace_found,copy_opts,runstats)
                     else:
-                        print("The table name is not provided") 
+                        print("The table name is not provided")
                 else:
-                        print("The schema name is not provided") 
+                        print("The schema name is not provided")
         else:
             print("Kindly check if the Db2 warehouse Instance is up and runnning")
     except Exception as e:
@@ -676,7 +733,8 @@ def status(
         database: Annotated[str, typer.Option(
             help="Database to be connected")] = "BLUDB",
         active_runs: Annotated[bool, typer.Option(help="active - lists the active migration runs;completed - lists the completed migration runs")] = False,
-        port: Annotated[str, typer.Option(help="Port to be used for Db2 warehouse Instance")] = "50001"):
+        port: Annotated[str, typer.Option(help="Port to be used for Db2 warehouse Instance")] = "50001",
+        enable_ssl: Annotated[bool, typer.Option(help="Enable SSL encryption for the database connection.")] = False):
     '''
     Status and the metrics of the migration jobs
 
@@ -695,11 +753,11 @@ def status(
     if dsn is not None:
         valid_dsn = dsn
         conn_test = db2wh_pyodbc_connection(
-            user_id, password, hostname, port, database, True,dsn)
+            user_id, password, hostname, port, database, True, dsn, enable_ssl)
     else:
          valid_dsn = None
          conn_test = db2wh_pyodbc_connection(
-            user_id, password, hostname, port, database, True,valid_dsn)
+            user_id, password, hostname, port, database, True, valid_dsn, enable_ssl)
     if conn_test:
         tables_in_block = []
         tables_in_cos = []
@@ -711,11 +769,11 @@ def status(
                  sys.exit(0)
         if scope == "tables":
             tablespaces_in_instance = get_tablespaces_in_block_and_cos(
-                user_id, password, hostname, port, database,dsn)
+                user_id, password, hostname, port, database, dsn, enable_ssl)
             if len(tablespaces_in_instance) != 0:
                 for tablespace in tablespaces_in_instance:
                     table_in_tbspace = get_tables_cnt_under_tablespaces(
-                        user_id, password, hostname, port, database, tablespace,dsn)
+                        user_id, password, hostname, port, database, tablespace, dsn, enable_ssl)
                     if "OBJ" not in tablespace:
                         total_tables_in_block = total_tables_in_block + table_in_tbspace
                         tables_in_block.append([tablespace, table_in_tbspace])
@@ -745,14 +803,14 @@ def status(
                     if active_runs is True:
                         if len(active_migration_job_details) != 0:
                             tb_table_migration_runs = parse_the_json_files_for_status(
-                                active_migration_job_details, user_id, password, hostname, port, database, STATUS_TABLE_HEADER_ACTIVE_RUNS, active_runs,dsn)
+                                active_migration_job_details, user_id, password, hostname, port, database, STATUS_TABLE_HEADER_ACTIVE_RUNS, active_runs, dsn, enable_ssl)
                             console.print(tb_table_migration_runs)
                         else:
                             print("No active migration runs yet in the instance")
                     else:
                         if len(completed_migration_job_details) != 0:
                             tb_table_migration_runs = parse_the_json_files_for_status(
-                                completed_migration_job_details, user_id, password, hostname, port, database, STATUS_TABLE_HEADER, active_runs,dsn)
+                                completed_migration_job_details, user_id, password, hostname, port, database, STATUS_TABLE_HEADER, active_runs, dsn, enable_ssl)
                             console.print(tb_table_migration_runs)
                         else:
                             print("No migration runs yet in the instance")
@@ -762,7 +820,7 @@ def status(
                 print("The db2whmigratetocos-logs folder is not present in the given path")
                 
    
-@ app.command()
+@app.command()
 def cancel(
         schema_name: Annotated[str, typer.Option(help="Schema Name of the table")],
         table_name: Annotated[str, typer.Option(help="Table Name to cancel the run")],
@@ -781,7 +839,8 @@ def cancel(
             help="Pass the DSN name if it is already configured")] = None,
         database: Annotated[str, typer.Option(
             help="Database to be connected")] = "BLUDB",
-        port: Annotated[str, typer.Option(help="Port to be used for Db2 warehouse Instance")] = "50001"):
+        port: Annotated[str, typer.Option(help="Port to be used for Db2 warehouse Instance")] = "50001",
+        enable_ssl: Annotated[bool, typer.Option(help="Enable SSL encryption for the database connection.")] = False):
 
     """
     To cancel a run for the table migration run 
@@ -791,11 +850,11 @@ def cancel(
         if dsn != None:
          valid_dsn = dsn
          conn_test = db2wh_pyodbc_connection(
-            user_id, password, hostname, port, database, True,valid_dsn)
+            user_id, password, hostname, port, database, True, valid_dsn, enable_ssl)
         else:
          valid_dsn = None
          conn_test = db2wh_pyodbc_connection(
-            user_id, password, hostname, port, database, True,valid_dsn)
+            user_id, password, hostname, port, database, True, valid_dsn, enable_ssl)
         print()
         console.print("Test Connect to the Db2 warehouse instance")
         if conn_test:

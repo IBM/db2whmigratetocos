@@ -11,13 +11,15 @@ import os
 import sys
 import uuid
 import math
+from collections import deque, defaultdict
 from datetime import datetime
+from typing import List
 import pandas as pd
 from rich.table import Table
 from rich.console import Console
 from db2whmigratetocos.admin_move_table_func import adm_move_table_ops_db2woc
 from db2whmigratetocos.constants import SCHEMA_CSV_COLUMNS, TABLESPACE_CSV_COLUMNS
-from db2whmigratetocos.queries import ADM_MOVE_TABLE_FIND_PHASE, GET_OBJECTSPACE_USING_SGNAME, GET_STORAGE_PATH_DEFINED_IN_INSTANCE, GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY, GET_USER_CREATED_INDEX, LIST_SCHEMAS, LIST_TABLES_IN_SCHEMA, LIST_TABLES_IN_TSPACE, LIST_TBSPACE_BY_TABNAME, LIST_TBSPACES, TAB_SIZE, GET_THE_ROW_COUNT, ADM_MOVE_TABLE_FIND_TARGET_TABLE
+from db2whmigratetocos.queries import ADM_MOVE_TABLE_FIND_PHASE, GET_OBJECTSPACE_USING_SGNAME, GET_STORAGE_PATH_DEFINED_IN_INSTANCE, GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY, GET_USER_CREATED_INDEX, LIST_SCHEMAS, LIST_TABLES_IN_SCHEMA, LIST_TABLES_IN_TSPACE, LIST_TBSPACE_BY_TABNAME, LIST_TBSPACES, TAB_SIZE, GET_THE_ROW_COUNT, ADM_MOVE_TABLE_FIND_TARGET_TABLE, LIST_PARENT_TABLES, CREATE_TABLESPACE
 
 
 console = Console()
@@ -55,7 +57,7 @@ def run_command(command: str) -> str:
 
 # db2 utility functions
 
-def get_tablespaces_in_block_and_cos(user: str, password: str, hostname: str, port: str, database: str,dsn:str):
+def get_tablespaces_in_block_and_cos(user: str, password: str, hostname: str, port: str, database: str, dsn:str, enable_ssl: bool):
     """
     Get the list tablespaces in the block storage and COS
 
@@ -72,20 +74,21 @@ def get_tablespaces_in_block_and_cos(user: str, password: str, hostname: str, po
     try:
         user_tablespaces_list = []
         cnxn = db2wh_pyodbc_connection(
-            user, password, hostname, port, database, False,dsn)
+            user, password, hostname, port, database, False, dsn, enable_ssl)
         conn = cnxn.cursor()
         conn.execute(LIST_TBSPACES)
         rows = conn.fetchall()
         cnxn.close()
+        sys_tablespaces = ["SYS", "TS4CONSOLE", "TS4MONITOR", "BIGSQLCATUTILITY", "TEMP", "TMP"]
         for item in rows:
-            if "SYS" not in item[0] and "TS4CONSOLE" not in item[0] and "TS4MONITOR" not in item[0]   and "BIGSQLCATUTILITY" not in item[0] and "TEMP" not in item[0] and "TMP" not in item[0]:
+            if not any(tablespace in item[0] for tablespace in sys_tablespaces):
                 user_tablespaces_list.append(item[0])
         return user_tablespaces_list
     except Exception as e:
         print(e)
 
 
-def get_schema_in_instance(user: str, password: str, hostname: str, port: str, database: str,dsn:str):
+def get_schema_in_instance(user: str, password: str, hostname: str, port: str, database: str, dsn:str, enable_ssl: bool):
     """_summary_
 
     Args:
@@ -101,7 +104,7 @@ def get_schema_in_instance(user: str, password: str, hostname: str, port: str, d
     try:
         user_schemas_list = []
         cnxn = db2wh_pyodbc_connection(
-            user, password, hostname, port, database, False,dsn)
+            user, password, hostname, port, database, False, dsn, enable_ssl)
         conn = cnxn.cursor()
         conn.execute(LIST_SCHEMAS)
         rows = conn.fetchall()
@@ -114,7 +117,7 @@ def get_schema_in_instance(user: str, password: str, hostname: str, port: str, d
         print(e)
 
 
-def get_tables_under_schema_in_db2woc(user: str, password: str, hostname: str, port: str, database: str, schemaname: str,dsn:str):
+def get_tables_under_schema_in_db2woc(user: str, password: str, hostname: str, port: str, database: str, schemaname: str, dsn:str, enable_ssl: bool):
     """_summary_
 
     Args:
@@ -132,24 +135,27 @@ def get_tables_under_schema_in_db2woc(user: str, password: str, hostname: str, p
         tables_in_schema = []
         total_estimate_size = 0
         cnxn = db2wh_pyodbc_connection(
-            user, password, hostname, port, database, False,dsn)
+            user, password, hostname, port, database, False, dsn, enable_ssl)
         conn = cnxn.cursor()
         conn.execute(LIST_TABLES_IN_SCHEMA.format(SCHEMANAME=schemaname))
         rows = conn.fetchall()
         cnxn.close()
         table_cnt = len(rows)
         for item in rows:
-            if str(item[0]).endswith('t') is False: 
+            if str(item[0]).endswith('t') is False:
                 est_size = " "
                 est_size = tab_size_by_table_name(
-                    user, password, hostname, port, database, schemaname, item[0],dsn)
+                    user, password, hostname, port, database, schemaname, item[0], dsn, enable_ssl)
                 total_estimate_size += int(est_size)
                 tables_in_schema.append([item[0], est_size])
         return table_cnt, total_estimate_size, tables_in_schema
     except Exception as e:
         print(e)
 
-def get_tables_under_schem_notabsize_in_db2woc(user: str, password: str, hostname: str, port: str, database: str, schemaname: str,dsn:str):
+        import traceback
+        print(traceback.format_exc())
+
+def get_tables_under_schem_notabsize_in_db2woc(user: str, password: str, hostname: str, port: str, database: str, schemaname: str, dsn:str, enable_ssl: bool):
     """_summary_
 
     Args:
@@ -167,7 +173,7 @@ def get_tables_under_schem_notabsize_in_db2woc(user: str, password: str, hostnam
         tables_in_schema = []
         total_estimate_size = 0
         cnxn = db2wh_pyodbc_connection(
-            user, password, hostname, port, database, False,dsn)
+            user, password, hostname, port, database, False, dsn, enable_ssl)
         conn = cnxn.cursor()
         conn.execute(LIST_TABLES_IN_SCHEMA.format(SCHEMANAME=schemaname))
         rows = conn.fetchall()
@@ -181,7 +187,7 @@ def get_tables_under_schem_notabsize_in_db2woc(user: str, password: str, hostnam
 
 
 
-def tab_size_by_table_name(user: str, password: str, hostname: str, port: str, database: str, schemaname: str, tablename: str,dsn:str):
+def tab_size_by_table_name(user: str, password: str, hostname: str, port: str, database: str, schemaname: str, tablename: str, dsn:str, enable_ssl: bool):
     """_summary_
 
     Args:
@@ -198,18 +204,18 @@ def tab_size_by_table_name(user: str, password: str, hostname: str, port: str, d
     """
     try:
         cnxn = db2wh_pyodbc_connection(
-            user, password, hostname, port, database, False,dsn)
+            user, password, hostname, port, database, False, dsn, enable_ssl)
         conn = cnxn.cursor()
         conn.execute(TAB_SIZE.format(TABSCHEMA=schemaname, TABNAME=tablename))
         rows = conn.fetchall()
         cnxn.close()
         for item in rows:
-            return int(item[0])+int(item[1])+int(item[2])+int(item[3])+int(item[4])+int(item[5])
+            return int(item[0])+int(item[1])+int(item[2])+int(item[3])+int(item[4])
     except Exception as e:
         print(e)
 
 
-def get_tables_under_tablespace_in_db2woc(user: str, password: str, hostname: str, port: str, database: str, tablespace: str,dsn:str):
+def get_tables_under_tablespace_in_db2woc(user: str, password: str, hostname: str, port: str, database: str, tablespace: str, dsn:str, enable_ssl: bool):
     """_summary_
 
     Args:
@@ -226,7 +232,7 @@ def get_tables_under_tablespace_in_db2woc(user: str, password: str, hostname: st
     try:
         table_names_in_tablespace = []
         cnxn = db2wh_pyodbc_connection(
-            user, password, hostname, port, database, False,dsn)
+            user, password, hostname, port, database, False, dsn, enable_ssl)
         conn = cnxn.cursor()
         table_cnt = 0
         total_estimate_size = 0
@@ -239,7 +245,7 @@ def get_tables_under_tablespace_in_db2woc(user: str, password: str, hostname: st
                     if str(item[0]).endswith('t') is False:
                         table_cnt = table_cnt + 1
                         est_size = tab_size_by_table_name(
-                            user, password, hostname, port, database, item[1], item[0],dsn)
+                            user, password, hostname, port, database, item[1], item[0], dsn, enable_ssl)
                         total_estimate_size += int(est_size)
                         table_names_in_tablespace.append(
                             [item[0], item[1], est_size])
@@ -247,7 +253,61 @@ def get_tables_under_tablespace_in_db2woc(user: str, password: str, hostname: st
     except Exception as e:
         print(e)
 
-def get_tables_under_tablespace_no_tabsize_in_db2woc(user: str, password: str, hostname: str, port: str, database: str, tablespace: str,dsn:str):
+def get_parent_table(table, schema, object_space_list, fetch_details, cursor):
+    # return list of tablespace tablename schema size and storage of parent table of table, schema
+    parent_tables = []
+
+    cursor.execute(LIST_PARENT_TABLES.format(TABNAME=table, SCHEMANAME=schema))
+    rows = cursor.fetchall()
+
+    for table_name, schema_name in rows:
+        cursor.execute(LIST_TBSPACE_BY_TABNAME.format(TABNAME=table_name, SCHEMANAME=schema_name))
+        tablespace = cursor.fetchone()[0]
+
+        size = " "
+        if fetch_details:
+            cursor.execute(TAB_SIZE.format(TABSCHEMA=schema_name, TABNAME=table_name))
+            data = cursor.fetchone()
+            size = str(data[0] + data[1] + data[2] + data[3] + data[4])
+
+        storage = "cos" if tablespace in object_space_list else "block-storage"
+
+        parent_tables.append((tablespace, table_name, schema_name, size, storage))
+
+    return parent_tables
+
+def get_tables_parent_tables(tables_list: List[tuple], object_space_list, fetch_details: bool,
+                             user: str, password: str, hostname: str, port: str, database: str,
+                             dsn:str, enable_ssl: bool):
+
+    import pyodbc
+
+    connection_string = get_connection_string(user, password, hostname, port, database, dsn,
+                                              enable_ssl)
+
+    conn = pyodbc.connect(connection_string)
+    cur = conn.cursor()
+    all_tables = set(tables_list)
+    queue = deque(tables_list)
+
+    # Collect parents of tables iteratively
+    while queue:
+        table_details = queue.popleft()
+
+        parents: List[tuple] = get_parent_table(table_details[1], table_details[2],
+                                                object_space_list, fetch_details, cur)
+
+        for parent in parents:
+
+            if parent not in all_tables:
+                all_tables.add(parent)
+
+                # add the parent table to queue to check its dependencies
+                queue.append(parent)
+
+    return list(all_tables)
+
+def get_tables_under_tablespace_no_tabsize_in_db2woc(user: str, password: str, hostname: str, port: str, database: str, tablespace: str, dsn:str, enable_ssl: bool):
     """_summary_
 
     Args:
@@ -264,7 +324,7 @@ def get_tables_under_tablespace_no_tabsize_in_db2woc(user: str, password: str, h
     try:
         table_names_in_tablespace = []
         cnxn = db2wh_pyodbc_connection(
-            user, password, hostname, port, database, False,dsn)
+            user, password, hostname, port, database, False, dsn, enable_ssl)
         conn = cnxn.cursor()
         table_cnt = 0
         conn.execute(LIST_TABLES_IN_TSPACE.format(TABLESPACE=tablespace))
@@ -282,7 +342,7 @@ def get_tables_under_tablespace_no_tabsize_in_db2woc(user: str, password: str, h
         print(e)
 
 
-def get_tables_cnt_under_tablespaces(user: str, password: str, hostname: str, port: str, database: str, tablespace: str,dsn:str):
+def get_tables_cnt_under_tablespaces(user: str, password: str, hostname: str, port: str, database: str, tablespace: str, dsn:str, enable_ssl: bool):
     """_summary_
 
     Args:
@@ -298,7 +358,7 @@ def get_tables_cnt_under_tablespaces(user: str, password: str, hostname: str, po
     """
     try:
         cnxn = db2wh_pyodbc_connection(
-            user, password, hostname, port, database, False,dsn)
+            user, password, hostname, port, database, False, dsn, enable_ssl)
         conn = cnxn.cursor()
         conn.execute(LIST_TABLES_IN_TSPACE.format(TABLESPACE=tablespace))
         rows = conn.fetchall()
@@ -314,7 +374,7 @@ def get_tables_cnt_under_tablespaces(user: str, password: str, hostname: str, po
         print(e)
 
 
-def get_tabname_schemaname_under_tablespace_in_db2woc(user: str, password: str, hostname: str, port: str, database: str, tablespace: str,dsn:str):
+def get_tabname_schemaname_under_tablespace_in_db2woc(user: str, password: str, hostname: str, port: str, database: str, tablespace: str, dsn:str, enable_ssl: bool):
     """_summary_
 
     Args:
@@ -331,7 +391,7 @@ def get_tabname_schemaname_under_tablespace_in_db2woc(user: str, password: str, 
     try:
         table_names_in_tablespace = []
         cnxn = db2wh_pyodbc_connection(
-            user, password, hostname, port, database, False,dsn)
+            user, password, hostname, port, database, False, dsn, enable_ssl)
         conn = cnxn.cursor()
         conn.execute(LIST_TABLES_IN_TSPACE.format(TABLESPACE=tablespace))
         rows = conn.fetchall()
@@ -345,7 +405,7 @@ def get_tabname_schemaname_under_tablespace_in_db2woc(user: str, password: str, 
         print(e)
 
 
-def get_tbpsace_name_for_table(user: str, password: str, hostname: str, port: str, database: str, tablename: str, schemaname: str,dsn:str):
+def get_tbpsace_name_for_table(user: str, password: str, hostname: str, port: str, database: str, tablename: str, schemaname: str, dsn:str, enable_ssl: bool):
     """_summary_
 
     Args:
@@ -361,10 +421,10 @@ def get_tbpsace_name_for_table(user: str, password: str, hostname: str, port: st
     """
     try:
         valid_tablespace_list = get_tablespaces_in_block_and_cos(
-            user, password, hostname, port, database,dsn)
+            user, password, hostname, port, database, dsn, enable_ssl)
         tablespace_name = " "
         cnxn = db2wh_pyodbc_connection(
-            user, password, hostname, port, database, False,dsn)
+            user, password, hostname, port, database, False, dsn, enable_ssl)
         conn = cnxn.cursor()
         conn.execute(LIST_TBSPACE_BY_TABNAME.format(
             TABNAME=tablename, SCHEMANAME=schemaname))
@@ -380,7 +440,8 @@ def get_tbpsace_name_for_table(user: str, password: str, hostname: str, port: st
 # pyodbc connection fucntions
 
 
-def get_connection_string(user: str, password: str, hostname: str, port: str, database: str,dsn:str):
+def get_connection_string(user: str, password: str, hostname: str, port: str, database: str,
+                          dsn: str, enable_ssl: bool):
     """_summary_
 
     Args:
@@ -389,6 +450,8 @@ def get_connection_string(user: str, password: str, hostname: str, port: str, da
         hostname (str): _description_
         port (str): _description_
         database (str): _description_
+        dsn (str): _description_
+        enable_ssl 
 
     Returns:
         _type_: _description_
@@ -404,13 +467,14 @@ def get_connection_string(user: str, password: str, hostname: str, port: str, da
     port = "Port="+port+";"
     uid = "Uid="+user+";"
     password = "Pwd="+password+";"
-    security = "Security=ssl;"
+    security = "Security=ssl;" if enable_ssl else ""
     protocol = "Protocol=TCPIP;"
     con_str = driver+database+hostname+port+uid+password+security+protocol
     return con_str
 
 
-def db2wh_pyodbc_connection(user: str, password: str, hostname: str, port: str, database: str, test_con: bool,dsn:str) -> bool:
+def db2wh_pyodbc_connection(user: str, password: str, hostname: str, port: str, database: str,
+                            test_con: bool, dsn:str, enable_ssl: bool) -> bool:
     """_summary_
 
     Args:
@@ -427,7 +491,7 @@ def db2wh_pyodbc_connection(user: str, password: str, hostname: str, port: str, 
     import pyodbc
     try:
         connection_string = get_connection_string(
-            user, password, hostname, port, database,dsn)
+            user, password, hostname, port, database, dsn, enable_ssl)
         cnxn = pyodbc.connect(connection_string)
         if test_con:
             try:
@@ -489,7 +553,7 @@ def create_log_directory_for_migration_run(log_directory_base_path,directory_nam
         directory_path = check_if_logs_path_exist_else_create(log_directory_base_path)
         migration_sub_directory = str(
             directory_path)+"/"+directory_name.strip()
-        os.makedirs(migration_sub_directory)
+        os.makedirs(migration_sub_directory, exist_ok=True)
         return migration_sub_directory
     except Exception as e:
         print(e)
@@ -574,7 +638,7 @@ def get_json_format_for_migration_run(schemaname: str, tablename: str, status: s
         print(e)
 
 
-def find_adm_status_by_tablename(user: str, password: str, hostname: str, port: str, database: str, tablename: str,dsn:str):
+def find_adm_status_by_tablename(user: str, password: str, hostname: str, port: str, database: str, tablename: str, dsn: str, enable_ssl: bool):
     """_summary_
 
     Args:
@@ -592,7 +656,7 @@ def find_adm_status_by_tablename(user: str, password: str, hostname: str, port: 
     try:
         table_phase = " "
         connection_string = get_connection_string(
-            user, password, hostname, port, database,dsn)
+            user, password, hostname, port, database, dsn, enable_ssl)
         cnxn = pyodbc.connect(connection_string+"LONGDATACOMPAT=1;")
         conn = cnxn.cursor()
         conn.execute(ADM_MOVE_TABLE_FIND_PHASE.format(TABLENAME=tablename))
@@ -648,7 +712,7 @@ def list_migration_runs(migration_batches, path):
     return active_migration_job_details, completed_migration_job_details
 
 
-def parse_the_json_files_for_status(migration_job_details: list, user_id: str, password: str, hostname: str, port: str, database: str, table_header: list, active: bool,dsn:str) -> Table:
+def parse_the_json_files_for_status(migration_job_details: list, user_id: str, password: str, hostname: str, port: str, database: str, table_header: list, active: bool, dsn:str, enable_ssl: bool) -> Table:
     """_summary_
 
     Args:
@@ -676,7 +740,7 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
             for phase in details['phase_logs']:
                 if phase['STATUS'] != 'COMPLETE' and phase['STATUS'] != 'INPROGRESS':
                     phase_status = find_adm_status_by_tablename(
-                        user_id, password, hostname, port, database, str(details['table_name']),dsn)
+                        user_id, password, hostname, port, database, str(details['table_name']), dsn, enable_ssl)
                 else:
                     phase_status = details['status']
                 if phase['STATUS'] == "INIT":
@@ -697,13 +761,13 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
         if active is True:
             if phase_status != "COMPLETE" and "REQUESTED TO" not in phase_status and  "ERROR" not in phase_status:
                 target_table_name = get_the_original_tablename_from_admin_move_table(
-                    details['table_name'], user_id, password, hostname, port, database,dsn)
+                    details['table_name'], user_id, password, hostname, port, database, dsn, enable_ssl)
                 target_rows = get_the_rows_moved_in_admin_move_table(
-                    details['schema_name'], target_table_name, user_id, password, hostname, port, database,dsn)
-                original_rows = get_the_rows_moved_in_admin_move_table_using_count( details['schema_name'], details['table_name'], user_id, password, hostname, port, database,dsn)
+                    details['schema_name'], target_table_name, user_id, password, hostname, port, database, dsn, enable_ssl)
+                original_rows = get_the_rows_moved_in_admin_move_table_using_count( details['schema_name'], details['table_name'], user_id, password, hostname, port, database, dsn, enable_ssl)
                 if original_rows == 0 or original_rows is None:
                     original_rows = get_the_rows_moved_in_admin_move_table(
-                    details['schema_name'], details['table_name'], user_id, password, hostname, port, database,dsn)
+                    details['schema_name'], details['table_name'], user_id, password, hostname, port, database, dsn, enable_ssl)
                 if target_rows is not None and original_rows is not None and int(original_rows) != 0:
                   if target_rows <=original_rows:
                     progress = str(math.ceil((100 - ((int(original_rows) - int(target_rows))/int(original_rows)) * 100))) + " %"
@@ -748,7 +812,7 @@ def move_the_tables(schema, tablename, source_tablespace, dest_tbspace, log_dire
         with open(log_directory_name+"/"+report_file_name_for_the_table, 'w', encoding='utf-8') as f:
             json.dump(migration_table_details, f, indent=6)
     if std_log_creation_done:
-        print("Table Name " + tablename)
+        print(f"Table : '{tablename}', Schema: '{schema}', Source Tablespace: '{source_tablespace}'")
         print("Migration ID " + migration_job_id)
         print("Reports in " + log_directory_name +
               "/"+report_file_name_for_the_table)
@@ -872,7 +936,7 @@ def export_the_data_as_csv(tables, filename_prefix):
     return filename
 
 
-def get_the_original_tablename_from_admin_move_table(tablename, user_id, password, hostname, port, database,dsn):
+def get_the_original_tablename_from_admin_move_table(tablename, user_id, password, hostname, port, database, dsn, enable_ssl):
     """_summary_
 
     Args:
@@ -889,7 +953,7 @@ def get_the_original_tablename_from_admin_move_table(tablename, user_id, passwor
     """
     import pyodbc
     connection_string = get_connection_string(
-        user_id, password, hostname, port, database,dsn)
+        user_id, password, hostname, port, database, dsn, enable_ssl)
     cnxn = pyodbc.connect(connection_string+"LONGDATACOMPAT=1;")
     conn = cnxn.cursor()
     conn.execute(ADM_MOVE_TABLE_FIND_TARGET_TABLE.format(
@@ -900,7 +964,7 @@ def get_the_original_tablename_from_admin_move_table(tablename, user_id, passwor
         return item[0]
 
 
-def get_the_rows_moved_in_admin_move_table(schemaname, tablename, user_id, password, hostname, port, database,dsn):
+def get_the_rows_moved_in_admin_move_table(schemaname, tablename, user_id, password, hostname, port, database, dsn, enable_ssl: bool):
     """_summary_
 
     Args:
@@ -916,7 +980,7 @@ def get_the_rows_moved_in_admin_move_table(schemaname, tablename, user_id, passw
         _type_: _description_
     """
     cnxn = db2wh_pyodbc_connection(
-        user_id, password, hostname, port, database, False,dsn)
+        user_id, password, hostname, port, database, False, dsn, enable_ssl)
     conn = cnxn.cursor()
     conn.execute(GET_THE_ROW_COUNT.format(
         TABLENAME=tablename, SCHEMANAME=schemaname))
@@ -926,7 +990,7 @@ def get_the_rows_moved_in_admin_move_table(schemaname, tablename, user_id, passw
     for item in rows:
         return item[0]
 
-def get_the_rows_moved_in_admin_move_table_using_count(schemaname, tablename, user_id, password, hostname, port, database,dsn):
+def get_the_rows_moved_in_admin_move_table_using_count(schemaname, tablename, user_id, password, hostname, port, database, dsn, enable_ssl: bool):
     """_summary_
 
     Args:
@@ -942,7 +1006,7 @@ def get_the_rows_moved_in_admin_move_table_using_count(schemaname, tablename, us
         _type_: _description_
     """
     cnxn = db2wh_pyodbc_connection(
-        user_id, password, hostname, port, database, False,dsn)
+        user_id, password, hostname, port, database, False, dsn, enable_ssl)
     conn = cnxn.cursor()
     conn.execute(GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY.format(
         TABLENAME=tablename, SCHEMANAME=schemaname))
@@ -951,7 +1015,7 @@ def get_the_rows_moved_in_admin_move_table_using_count(schemaname, tablename, us
     for item in rows:
         return item[0]
 
-def get_list_of_objectspaces(user_id, password, hostname, port, database,dsn:str):
+def get_list_of_objectspaces(user_id, password, hostname, port, database, dsn:str, enable_ssl: bool):
     """
 
     Returns:
@@ -960,7 +1024,7 @@ def get_list_of_objectspaces(user_id, password, hostname, port, database,dsn:str
     try:
         object_space_list = []
         cnxn = db2wh_pyodbc_connection(
-                user_id, password, hostname, port, database, False,dsn)
+                user_id, password, hostname, port, database, False, dsn, enable_ssl)
         conn = cnxn.cursor()
         conn.execute(GET_STORAGE_PATH_DEFINED_IN_INSTANCE)
         rows = conn.fetchall()
@@ -971,16 +1035,98 @@ def get_list_of_objectspaces(user_id, password, hostname, port, database,dsn:str
                 for item in rows:
                     object_space_list.append(item[0])
                 cnxn.close()
-                return object_space_list     
+                return object_space_list
+        return []
     except Exception as e:
         print(e)
 
 
-def check_for_user_created_indexes(user_id, password, hostname, port, database,tablename,schemaname,dsn:str):
+def create_tablespace(user_id: str, password: str, hostname: str, port: str, database: str, dsn:str, enable_ssl: bool, tbspaces: list) -> list:
+    """Creates tablespaces if are not already available.
+
+    Parameters
+    ----------
+    user_id : str
+        _description_
+    password : str
+        _description_
+    hostname : str
+        _description_
+    port : str
+        _description_
+    database : str
+        _description_
+    dsn : str
+        _description_
+    enable_ssl : bool
+        _description_
+    """
+    try:
+        cnxn = db2wh_pyodbc_connection(
+        user_id, password, hostname, port, database, False, dsn, enable_ssl
+    )
+
+        conn = cnxn.cursor()
+        conn.execute(GET_STORAGE_PATH_DEFINED_IN_INSTANCE)
+        rows = conn.fetchall()
+
+        storage_group = next((row[0] for row in rows if "DB2REMOTE" in row[1].upper()), None)
+
+        if storage_group is None:
+            console.print("No storage group is pointing to COS.")
+            sys.exit()
+
+        conn.execute(GET_OBJECTSPACE_USING_SGNAME.format(SGNAME=storage_group))
+        rows = conn.fetchall()
+
+        available_tbspaces = [tup[0].upper() for tup in rows]
+        nos_avl_tbspaces = len(available_tbspaces)
+
+        unavailable_tbspaces = list(set(tbspaces) - set(available_tbspaces))
+
+        if not unavailable_tbspaces:
+            console.print(f"All the tablespaces '{', '.join(tbspaces)}' are available")
+            return []
+
+        if nos_avl_tbspaces == 16:
+
+            console.print(
+                f"The number of tablespaces in storage group '{storage_group}' are 16. "
+                f"New tablespaces '{', '.join(tbspaces)}' can not be created."
+            )
+
+            sys.exit()
+
+        console.print("Creating tablespaces that are not available.")
+
+        for idx, tbspace in enumerate(unavailable_tbspaces):
+
+            if nos_avl_tbspaces == 16:
+
+                console.print(
+                    f"The number of tablespaces in storage group '{storage_group}' are 16. "
+                    f"Tablespaces '{', '.join(unavailable_tbspaces[idx:])}' can not be created. "
+                    f"Tables will be moved to tablespaces '{', '.join(unavailable_tbspaces[:idx])}'"
+                )
+
+                return unavailable_tbspaces[idx:]
+
+            conn.execute(CREATE_TABLESPACE.format(TABLESPACE=tbspace, STORAGE_GROUP=storage_group))
+            cnxn.commit()
+            nos_avl_tbspaces += 1
+
+        return []
+
+    except Exception as e:
+        print(e)
+
+
+
+def check_for_user_created_indexes(user_id, password, hostname, port, database,tablename,schemaname, dsn:str, enable_ssl: bool):
     import pyodbc
     try:
         connection_string = get_connection_string(
-            user_id, password, hostname, port, database,dsn)
+            user_id, password, hostname, port, database, dsn, enable_ssl)
         cnxn = pyodbc.connect(connection_string+"LONGDATACOMPAT=1;")
         conn = cnxn.cursor()
         conn.execute(GET_USER_CREATED_INDEX.format(TABLENAME=tablename,SCHEMANAME=schemaname))
@@ -996,3 +1142,4 @@ def check_for_user_created_indexes(user_id, password, hostname, port, database,t
            return False
     except Exception as e:
         print(e)
+
