@@ -400,3 +400,43 @@ db2whmigratetocos cmove --hostname \<hostname\> --user-id \<user_id\> --password
 --dsn \<dsn\> --dest-tbspace OBJSTORESPACE1 --index-tbspace USERSPACE1 --skip-schema \<schema\> 
 --skip-schema \<schema\> --skip-tbspace \<tablespace\> 
 ```
+
+## Updating Certificates using GSKit
+
+If the warehouse cluster is using certificates higher than G1, the SSL connection may fail.
+
+It is recommended to upgrade the local certificates used. This can be done using the update_cert.sh script.
+
+The `update_cert.sh` script accepts the following parameters:
+
+- --gskit-path – Path to the gsk8capicmd_64 executable.
+Default: Uses gsk8capicmd_64 from the default GSKit installation path if not provided.
+
+- --lib-gsk-dir – Path to the directory containing the shared object file libgsk8km_64.so.
+
+- --password – Password to encrypt the keystore database file.
+Default: changeit
+
+- --action – Action to perform: either show installed certificates or add a new certificate.
+Default: show
+
+**Examples**
+
+To view installed certificates:
+```
+./update_cert.sh \
+    --gskit-path /opt/IBM/db2/v11.5/gskit/bin/gsk8capicmd_64 \
+    --lib-gsk-dir /opt/IBM/db2/v11.5/lib64/gskit_db2 \
+    --password myPassword \
+    --action show
+
+```
+
+To add new certficate (G5):
+```
+./update_cert.sh \
+    --gskit-path /opt/IBM/db2/v11.5/gskit/bin/gsk8capicmd_64 \
+    --lib-gsk-dir /opt/IBM/db2/v11.5/lib64/gskit_db2 \
+    --password myPassword \
+    --action add
+```
