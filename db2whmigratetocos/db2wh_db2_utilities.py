@@ -456,12 +456,10 @@ def get_connection_string(user: str, password: str, hostname: str, port: str, da
     Returns:
         _type_: _description_
     """
-    if dsn is not  None:
-        driver = "Driver={"+dsn+"};"
-    else:
-        home_path = check_home_path()
-        driver = "Driver={"+home_path.strip() + \
-            "/db2_cli_odbc_driver/odbc_cli/clidriver/lib/libdb2o.so};"
+    home_path = check_home_path()
+    driver = "Driver={"+home_path.strip() + "/db2_cli_odbc_driver/odbc_cli/clidriver/lib/libdb2o.so};"
+    _dsn = "DSN="+dsn+";" if dsn is not None else ""
+
     database = "Database="+database+";"
     hostname = "Hostname="+hostname+";"
     port = "Port="+port+";"
@@ -469,7 +467,7 @@ def get_connection_string(user: str, password: str, hostname: str, port: str, da
     password = "Pwd="+password+";"
     security = "Security=ssl;" if enable_ssl else ""
     protocol = "Protocol=TCPIP;"
-    con_str = driver+database+hostname+port+uid+password+security+protocol
+    con_str = driver+_dsn+database+hostname+port+uid+password+security+protocol
     return con_str
 
 
