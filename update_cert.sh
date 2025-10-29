@@ -37,10 +37,15 @@ if ! command -v $gskit_path >/dev/null 2>&1; then
 fi
 
 if [[ $action == "show" ]]; then
-    $gskit_path -cert -list -db /ssl/keystore.kdb -pw $password
+    $gskit_path -cert -list -db /ssl/keystore.kdb -pw $password -stashed
 
 elif [[ $action == "add" ]]; then
     mkdir -p /ssl
+
+    if [ ! -f /ssl/keystore.kdb ]; then
+        $gskit_path -keydb -create -db /ssl/keystore.kdb -pw $password -stash
+    fi
+
     $gskit_path -cert -add -db /ssl/keystore.kdb -pw $password -label "DigiCert G5 TLS RSA4096 SHA384 2021 CA1" -file DigiCertTLSRSA4096RootG5.crt
 
 else
