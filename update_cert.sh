@@ -37,7 +37,7 @@ if ! command -v $gskit_path >/dev/null 2>&1; then
 fi
 
 if [[ $action == "show" ]]; then
-    $gskit_path -cert -list -db /ssl/keystore.kdb -pw $password -stashed
+    $gskit_path -cert -list -db /ssl/keystore.kdb -pw $password
 
 elif [[ $action == "add" ]]; then
     mkdir -p /ssl
