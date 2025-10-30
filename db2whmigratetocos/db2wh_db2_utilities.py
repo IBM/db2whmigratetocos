@@ -467,7 +467,7 @@ def get_connection_string(user: str, password: str, hostname: str, port: str, da
     password = "Pwd="+password+";"
     security = "Security=ssl;" if enable_ssl else ""
     protocol = "Protocol=TCPIP;"
-    con_str = driver+_dsn+database+hostname+port+uid+password+security+protocol
+    con_str = driver+_dsn+database+hostname+port+uid+password+security+protocol+"Authentication=SERVER;"+"SSLClientKeystoredb=/ssl/keystore.kdb;"+"SSLClientKeyStash=/ssl/keystore.sth;"
     return con_str
 
 
