@@ -858,10 +858,10 @@ def cancel(
         print()
         console.print("Test Connect to the Db2 warehouse instance")
         if conn_test:
-            if  os.path.exists(log_file_name):
+            if log_file_name and os.path.exists(log_file_name):
                 print("Removing the LOG File")
                 os.remove(log_file_name)
-            if  os.path.exists(report_file_name):
+            if report_file_name and os.path.exists(report_file_name):
                 print("Removing the JSON File")
                 os.remove(report_file_name)
             if use_adc is False:
