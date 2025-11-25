@@ -12,7 +12,7 @@ import os
 from rich.console import Console
 from .constants import PACKAGE_NAME
 
-console = Console()
+console = Console(force_terminal=True)
 
 packagers = ["yum", "apt-get"]
 YUM_ODBC = "sudo yum -y install unixODBC"
@@ -331,17 +331,17 @@ def db2whmigratetocos_init():
     """
     print()
     console.print(
-        "IBM Db2whmigratetocos - An utility to move the data from block storage to COS", style="italic cyan bold")
+        "IBM Db2whmigratetocos - An utility to move the data from block storage to COS", style="italic cyan bold", soft_wrap=True)
     print()
     check_the_os_arch()
     # print("Read and Accept the license and the terms.")
     # check_and_accept_license_terms()
     check_and_set_home_path()
     print()
-    console.print("Installing the needed packages", style="italic")
+    console.print("Installing the needed packages", style="italic", soft_wrap=True)
     install_packages()
     print()
-    console.print("Unpacking and setting up db2 driver", style="italic")
+    console.print("Unpacking and setting up db2 driver", style="italic", soft_wrap=True)
     unzip_the_driver()
     setup_the_db2_driver()
     # not needed as the logs path is provided by the user
@@ -349,6 +349,6 @@ def db2whmigratetocos_init():
     # create_the_logs_folder()
     print()
     console.print(
-        "Final Environment check for all the needed dependencies", style="italic")
+        "Final Environment check for all the needed dependencies", style="italic", soft_wrap=True)
     db2migratetocos_env_check()
     print()

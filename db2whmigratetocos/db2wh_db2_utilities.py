@@ -22,7 +22,7 @@ from db2whmigratetocos.constants import SCHEMA_CSV_COLUMNS, TABLESPACE_CSV_COLUM
 from db2whmigratetocos.queries import ADM_MOVE_TABLE_FIND_PHASE, GET_OBJECTSPACE_USING_SGNAME, GET_STORAGE_PATH_DEFINED_IN_INSTANCE, GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY, GET_USER_CREATED_INDEX, LIST_SCHEMAS, LIST_TABLES_IN_SCHEMA, LIST_TABLES_IN_TSPACE, LIST_TBSPACE_BY_TABNAME, LIST_TBSPACES, TAB_SIZE, GET_THE_ROW_COUNT, ADM_MOVE_TABLE_FIND_TARGET_TABLE, LIST_PARENT_TABLES, CREATE_TABLESPACE
 
 
-console = Console()
+console = Console(force_terminal=True)
 
 
 # os_ functions
@@ -905,11 +905,11 @@ def print_export_tables_in_block_and_cos(tablespace_list, export_csv):
         else:
             tbs_block_table.add_row(str(row))
             tbs_block.append(str(row))
-    console.print(tbs_block_table)
-    console.print(tbs_cos_table)
+    console.print(tbs_block_table, soft_wrap=True)
+    console.print(tbs_cos_table, soft_wrap=True)
     if export_csv is True:
         console.print(
-            "Exporting the tablespace list into CSV")
+            "Exporting the tablespace list into CSV", soft_wrap=True)
         df_blk = pd.DataFrame(
             tbs_block, columns=["tablespace"])
         df_cos = pd.DataFrame(
@@ -919,13 +919,13 @@ def print_export_tables_in_block_and_cos(tablespace_list, export_csv):
         df_blk.to_csv(blk_filename, index=False)
         df_cos.to_csv(cos_filename, index=False)
         console.print(
-            "The tablespaces in block can be found in " + blk_filename)
+            "The tablespaces in block can be found in " + blk_filename, soft_wrap=True)
         console.print(
-            "The tablespaces in cos can be found in " + cos_filename)
+            "The tablespaces in cos can be found in " + cos_filename, soft_wrap=True)
 
 
 def export_the_data_as_csv(tables, filename_prefix):
-    console.print("Exporting the data into CSV")
+    console.print("Exporting the data into CSV", soft_wrap=True)
     columns = TABLESPACE_CSV_COLUMNS
     df = pd.DataFrame(tables, columns=columns)
     filename = filename_prefix + datetime.now().isoformat()+".csv"
@@ -1071,7 +1071,7 @@ def create_tablespace(user_id: str, password: str, hostname: str, port: str, dat
         storage_group = next((row[0] for row in rows if "DB2REMOTE" in row[1].upper()), None)
 
         if storage_group is None:
-            console.print("No storage group is pointing to COS.")
+            console.print("No storage group is pointing to COS.", soft_wrap=True)
             sys.exit()
 
         conn.execute(GET_OBJECTSPACE_USING_SGNAME.format(SGNAME=storage_group))
@@ -1083,19 +1083,19 @@ def create_tablespace(user_id: str, password: str, hostname: str, port: str, dat
         unavailable_tbspaces = list(set(tbspaces) - set(available_tbspaces))
 
         if not unavailable_tbspaces:
-            console.print(f"All the tablespaces '{', '.join(tbspaces)}' are available")
+            console.print(f"All the tablespaces '{', '.join(tbspaces)}' are available", soft_wrap=True)
             return []
 
         if nos_avl_tbspaces == 16:
 
             console.print(
                 f"The number of tablespaces in storage group '{storage_group}' are 16. "
-                f"New tablespaces '{', '.join(tbspaces)}' can not be created."
+                f"New tablespaces '{', '.join(tbspaces)}' can not be created.", soft_wrap=True
             )
 
             sys.exit()
 
-        console.print("Creating tablespaces that are not available.")
+        console.print("Creating tablespaces that are not available.", soft_wrap=True)
 
         for idx, tbspace in enumerate(unavailable_tbspaces):
 
@@ -1104,7 +1104,8 @@ def create_tablespace(user_id: str, password: str, hostname: str, port: str, dat
                 console.print(
                     f"The number of tablespaces in storage group '{storage_group}' are 16. "
                     f"Tablespaces '{', '.join(unavailable_tbspaces[idx:])}' can not be created. "
-                    f"Tables will be moved to tablespaces '{', '.join(unavailable_tbspaces[:idx])}'"
+                    f"Tables will be moved to tablespaces '{', '.join(unavailable_tbspaces[:idx])}'",
+                    soft_wrap=True
                 )
 
                 return unavailable_tbspaces[idx:]

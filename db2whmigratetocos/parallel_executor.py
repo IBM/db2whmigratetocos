@@ -11,7 +11,7 @@ from rich.console import Console
 from db2whmigratetocos.db2wh_db2_utilities import validate_and_get_df_from_the_csv, create_tablespace
 
 app = typer.Typer()
-console = Console()
+console = Console(force_terminal=True)
 
 
 def round_robin_counter(n):
@@ -93,7 +93,7 @@ def cmove(
     """
 
     if Path(csv_input).suffix.lower() != ".csv":
-        console.print(f"{csv_input} is not a csv file.")
+        console.print(f"{csv_input} is not a csv file.", soft_wrap=True)
         sys.exit()
 
     csv_content = validate_and_get_df_from_the_csv(csv_input)
@@ -130,17 +130,17 @@ def cmove(
         for fut in as_completed(futures):
             res = fut.result()
 
-            console.print("-------------------------------------------------------------")
+            console.print("-------------------------------------------------------------", soft_wrap=True)
 
             if res.stderr:
                 tab_det = futures[fut]
 
                 console.print(
                     f"Something went wrong while moving table {tab_det['tablename']} of "
-                    f"schmea {tab_det['schema']}"
+                    f"schmea {tab_det['schema']}", soft_wrap=True
                 )
 
-                console.print(res.stderr)
+                console.print(res.stderr, soft_wrap=True)
 
             else:
-                console.print(res.stdout)
+                console.print(res.stdout, soft_wrap=True)
