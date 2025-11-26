@@ -21,7 +21,7 @@ from .db2whmigratetocos_install_prereq import db2whmigratetocos_init
 
 app = typer.Typer()
 
-console = Console(force_terminal=True)
+console = Console()
 
 
 @app.callback()
@@ -94,7 +94,7 @@ def fetch(
     try:
         print()
         valid_dsn =  None
-        console.print("Test Connect to the Db2 warehouse instance", soft_wrap=True)
+        console.print("Test Connect to the Db2 warehouse instance")
         if dsn is not None:
          valid_dsn = dsn
          conn_status = db2wh_pyodbc_connection(
@@ -118,7 +118,7 @@ def fetch(
                 print(e)
             if scope == "tablespace":
                 print()
-                console.print("Listing the tablespaces", soft_wrap=True)
+                console.print("Listing the tablespaces")
                 object_space_list = get_list_of_objectspaces(user_id,password,hostname,port,database,valid_dsn,enable_ssl)
                 # validating the tablespace list
                 if all_objects == 'all':
@@ -133,9 +133,9 @@ def fetch(
                         if detail is True:
                             print()
                             console.print(
-                                "Gathering information about the tables in the Tablespace", soft_wrap=True)
+                                "Gathering information about the tables in the Tablespace")
                             console.print(
-                                "Displaying till 75 tables for each tablespace", soft_wrap=True)
+                                "Displaying till 75 tables for each tablespace")
                             print()
                             tables_list_in_tablespaces = []
                             for tbspace in tablespace_list:
@@ -149,16 +149,16 @@ def fetch(
                                     user_id, password, hostname, port, database, tbspace, valid_dsn, enable_ssl)
                                 tb_table = Table()
                                 tb_table.add_column(
-                                    "Tablename", justify="center", style="cyan")
+                                    "Tablename", justify="center")
                                 tb_table.add_column(
-                                    "Schema", justify="center", style="cyan")
+                                    "Schema", justify="center")
                                 tb_table.add_column(
-                                    "Table Size in KB", justify="center", style="cyan")
+                                    "Table Size in KB", justify="center")
                                 if len(tables) != 0:
                                     console.print(
-                                        f"The total number of tables in tablespace is {table_cnt}", soft_wrap=True)
+                                        f"The total number of tables in tablespace is {table_cnt}")
                                     console.print(
-                                        f"The total size of tables in tablespace is {total_estimate} KB", soft_wrap=True)
+                                        f"The total size of tables in tablespace is {total_estimate} KB")
                                     count = 0
                                     for table in tables:
                                         count = count+1
@@ -168,11 +168,11 @@ def fetch(
                                         tables_list_in_tablespaces.append(
                                             (tbspace, table[0], table[1], str(table[2]), str(tbspace_store)))
                                     print()
-                                    console.print(tb_table, soft_wrap=True)
+                                    console.print(tb_table)
                                 else:
                                     print()
                                     console.print(
-                                        "No tables found in the tablespace", soft_wrap=True)
+                                        "No tables found in the tablespace")
 
                             ordered = get_tables_parent_tables(tables_list_in_tablespaces,
                                                      object_space_list, detail, user_id, password,
@@ -196,12 +196,12 @@ def fetch(
                                     user_id, password, hostname, port, database, tbspace, valid_dsn, enable_ssl)
                                 tb_table = Table()
                                 tb_table.add_column(
-                                    "Tablename", justify="center", style="cyan")
+                                    "Tablename", justify="center")
                                 tb_table.add_column(
-                                    "Schema", justify="center", style="cyan")
+                                    "Schema", justify="center")
                                 if len(tables) != 0:
                                     console.print(
-                                        f"The total number of tables in tablespace is {table_cnt}", soft_wrap=True)
+                                        f"The total number of tables in tablespace is {table_cnt}")
                                     count = 0
                                     for table in tables:
                                         count = count+1
@@ -211,11 +211,11 @@ def fetch(
                                         tables_list_in_tablespaces.append(
                                             (tbspace, table[0], table[1]," ",str(tbspace_store)))
                                     print()
-                                    console.print(tb_table, soft_wrap=True)
+                                    console.print(tb_table)
                                 else:
                                     print()
                                     console.print(
-                                        "No tables found in the tablespace", soft_wrap=True)
+                                        "No tables found in the tablespace")
 
                             ordered = get_tables_parent_tables(tables_list_in_tablespaces,
                                                      object_space_list, detail, user_id, password,
@@ -230,7 +230,7 @@ def fetch(
                         print()
                         print("No Tablespaces found")
             if scope == "schema":
-                console.print(f"Listing the {scope}", soft_wrap=True)
+                console.print(f"Listing the {scope}")
                 try:
                     valid_schema_list = get_schema_in_instance(
                         user_id, password, hostname, port, database, valid_dsn, enable_ssl)
@@ -250,9 +250,9 @@ def fetch(
                         if detail is True:
                             print()
                             console.print(
-                                "Gathering the information about the tables in the schema", soft_wrap=True)
+                                "Gathering the information about the tables in the schema")
                             console.print(
-                                "Displaying till 75 tables for each schema", soft_wrap=True)
+                                "Displaying till 75 tables for each schema")
                             print()
                             tables_in_schema = []
                             object_space_list = get_list_of_objectspaces(user_id,password,hostname,port,database,valid_dsn,enable_ssl)
@@ -265,14 +265,14 @@ def fetch(
                                     user_id, password, hostname, port, database, schema, valid_dsn, enable_ssl)
                                 sc_table = Table()
                                 sc_table.add_column(
-                                    "Tablename", justify="center", style="cyan")
+                                    "Tablename", justify="center")
                                 sc_table.add_column(
-                                    "Tables Size in KB", justify="center", style="cyan")
+                                    "Tables Size in KB", justify="center")
                                 if len(tables) != 0:
                                     console.print(
-                                        f"The total number of tables in schema is {table_cnt}", soft_wrap=True)
+                                        f"The total number of tables in schema is {table_cnt}")
                                     console.print(
-                                        f"The total size of tables in schema is {total_estimate} KB", soft_wrap=True)
+                                        f"The total size of tables in schema is {total_estimate} KB")
                                     count = 0
                                     for table in tables:
                                         tbspace_store = ""
@@ -286,11 +286,11 @@ def fetch(
                                                 table[0], str(table[1]))
                                         tables_in_schema.append(
                                             (table_tablespace, table[0], schema, table[1], str(tbspace_store)))
-                                    console.print(sc_table, soft_wrap=True)
+                                    console.print(sc_table)
                                 else:
                                     print()
                                     console.print(
-                                        "No tables found in the schema", soft_wrap=True)
+                                        "No tables found in the schema")
                                     print()
 
                             ordered = get_tables_parent_tables(tables_list_in_tablespaces,
@@ -305,9 +305,9 @@ def fetch(
                         else:
                             print()
                             console.print(
-                                "Gathering the information about the tables in the schema", soft_wrap=True)
+                                "Gathering the information about the tables in the schema")
                             console.print(
-                                "Displaying till 75 tables for each schema", soft_wrap=True)
+                                "Displaying till 75 tables for each schema")
                             print()
                             tables_in_schema = []
                             object_space_list = get_list_of_objectspaces(user_id,password,hostname,port,database,valid_dsn,enable_ssl)
@@ -319,12 +319,12 @@ def fetch(
                                     user_id, password, hostname, port, database, schema, valid_dsn, enable_ssl)
                                 sc_table = Table()
                                 sc_table.add_column(
-                                    "Tablename", justify="center", style="cyan")
+                                    "Tablename", justify="center")
                                 sc_table.add_column(
-                                    "Schemaname", justify="center", style="cyan")
+                                    "Schemaname", justify="center")
                                 if len(tables) != 0:
                                     console.print(
-                                        f"The total number of tables in schema is {table_cnt}", soft_wrap=True)
+                                        f"The total number of tables in schema is {table_cnt}")
                                     count = 0
                                     for table in tables:
                                         tbspace_store = ""
@@ -338,11 +338,11 @@ def fetch(
                                                 table[0],schema)
                                         tables_in_schema.append(
                                             (table_tablespace, table[0], schema," ",str(tbspace_store)))
-                                    console.print(sc_table, soft_wrap=True)
+                                    console.print(sc_table)
                                 else:
                                     print()
                                     console.print(
-                                        "No tables found in the schema", soft_wrap=True)
+                                        "No tables found in the schema")
                                     print()
 
                             ordered = get_tables_parent_tables(tables_list_in_tablespaces,
@@ -452,7 +452,7 @@ def move(
             print("Please provide the logs directory to be used to create logs\n")  
             sys.exit(0)
         print()
-        console.print("Test Connect to the Db2 warehouse instance", soft_wrap=True)
+        console.print("Test Connect to the Db2 warehouse instance")
         object_space_list = get_list_of_objectspaces(user_id,password,hostname,port,database,valid_dsn,enable_ssl)
         if conn_test:
             valid_copy_opts = True
@@ -781,10 +781,10 @@ def status(
                         tables_in_cos.append([tablespace, table_in_tbspace])
                 console.rule("[bold red]Tablespaces in Block")
                 print_tables_in_block = print_table_row(tables_in_block)
-                console.print(print_tables_in_block, soft_wrap=True)
+                console.print(print_tables_in_block)
                 console.rule("[bold red]Tablespaces in COS")
                 print_in_tables_in_cos = print_table_row(tables_in_cos)
-                console.print(print_in_tables_in_cos, soft_wrap=True)
+                console.print(print_in_tables_in_cos)
         if scope == "migration-runs":
             console.rule("[bold red]Migration Runs")
             print(
@@ -804,14 +804,14 @@ def status(
                         if len(active_migration_job_details) != 0:
                             tb_table_migration_runs = parse_the_json_files_for_status(
                                 active_migration_job_details, user_id, password, hostname, port, database, STATUS_TABLE_HEADER_ACTIVE_RUNS, active_runs, dsn, enable_ssl)
-                            console.print(tb_table_migration_runs, soft_wrap=True)
+                            console.print(tb_table_migration_runs)
                         else:
                             print("No active migration runs yet in the instance")
                     else:
                         if len(completed_migration_job_details) != 0:
                             tb_table_migration_runs = parse_the_json_files_for_status(
                                 completed_migration_job_details, user_id, password, hostname, port, database, STATUS_TABLE_HEADER, active_runs, dsn, enable_ssl)
-                            console.print(tb_table_migration_runs, soft_wrap=True)
+                            console.print(tb_table_migration_runs)
                         else:
                             print("No migration runs yet in the instance")
                 else:
@@ -856,7 +856,7 @@ def cancel(
          conn_test = db2wh_pyodbc_connection(
             user_id, password, hostname, port, database, True, valid_dsn, enable_ssl)
         print()
-        console.print("Test Connect to the Db2 warehouse instance", soft_wrap=True)
+        console.print("Test Connect to the Db2 warehouse instance")
         if conn_test:
             if log_file_name and os.path.exists(log_file_name):
                 print("Removing the LOG File")
