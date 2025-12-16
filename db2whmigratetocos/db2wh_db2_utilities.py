@@ -727,7 +727,7 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
         end_time = " "
         init_bool = False
         end_bool = False
-        phase_status = ""
+        phase_name = ""
         time_taken = "-"
         init_start = " "
         cleanup_end = " "
@@ -737,10 +737,10 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
         if len(details['phase_logs']) > 0:
             for phase in details['phase_logs']:
                 if phase['STATUS'] != 'COMPLETE' and phase['STATUS'] != 'INPROGRESS':
-                    phase_status = find_adm_status_by_tablename(
+                    phase_name = find_adm_status_by_tablename(
                         user_id, password, hostname, port, database, str(details['table_name']), dsn, enable_ssl)
                 else:
-                    phase_status = details['status']
+                    phase_name = details['status']
                 if phase['STATUS'] == "INIT":
                     init_time = phase['INIT_START']
                     init_bool = True
@@ -755,9 +755,10 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
                     time_taken = str(
                         int((cleanup_end - init_start).total_seconds()))
         else:
-            phase_status = details['status'] 
+            phase_name = details['status']
+        error = "Yes" if details['status'] == "ERROR" else "No"
         if active is True:
-            if phase_status != "COMPLETE" and "REQUESTED TO" not in phase_status and  "ERROR" not in phase_status:
+            if phase_name != "COMPLETE" and "REQUESTED TO" not in phase_name and  "ERROR" not in phase_name:
                 target_table_name = get_the_original_tablename_from_admin_move_table(
                     details['table_name'], user_id, password, hostname, port, database, dsn, enable_ssl)
                 target_rows = get_the_rows_moved_in_admin_move_table(
@@ -772,11 +773,11 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
                   else:
                     progress = "TABLE_WRITE - Target "+ str(target_rows)
                 tb_table.add_row(str(details['batch_id']), str(details['migration_job_id']), str(details['table_name']), details['schema_name'],
-                                 phase_status, details['source_tablespace'], details['destination_tablespace'], str(progress))
+                                 phase_name, error, details['source_tablespace'], details['destination_tablespace'], str(progress))
         else:
-            if phase_status == 'COMPLETE':
+            if phase_name == 'COMPLETE':
                 tb_table.add_row(str(details['batch_id']), str(details['migration_job_id']), str(
-                    details['table_name']), details['schema_name'], phase_status, details['source_tablespace'], details['destination_tablespace'], time_taken)
+                    details['table_name']), details['schema_name'], phase_name, error, details['source_tablespace'], details['destination_tablespace'], time_taken)
     return tb_table
 
 

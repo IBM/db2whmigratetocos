@@ -720,7 +720,7 @@ def move(
         print(traceback.format_exc())
 
 
-@ app.command()
+@app.command()
 def status(
         scope: Annotated[str, typer.Option(help="tables - lists the no of tables in block & COS;migration-runs - migration runs that ran till now")],
         user_id: Annotated[str, typer.Option(help="User Id to connect to Db2 warehouse Instance")],
