@@ -703,7 +703,7 @@ def list_migration_runs(migration_batches, path):
                                  migration_run, "r", encoding='utf-8')
                     data = json.load(jfile)
                     data['batch_id'] = batch
-                    if data['status'] not in ("COMPLETE", "ERROR"):
+                    if data['status'] != "COMPLETE":
                         active_migration_job_details.append(data)
                     else:
                         completed_migration_job_details.append(data)
@@ -758,7 +758,7 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
             phase_name = details['status']
         error = "Yes" if details['status'] == "ERROR" else "No"
         if active is True:
-            if phase_name != "COMPLETE" and "REQUESTED TO" not in phase_name and  "ERROR" not in phase_name:
+            if phase_name != "COMPLETE" and "REQUESTED TO" not in phase_name:
                 target_table_name = get_the_original_tablename_from_admin_move_table(
                     details['table_name'], user_id, password, hostname, port, database, dsn, enable_ssl)
                 target_rows = get_the_rows_moved_in_admin_move_table(
@@ -775,7 +775,7 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
                 tb_table.add_row(str(details['batch_id']), str(details['migration_job_id']), str(details['table_name']), details['schema_name'],
                                  phase_name, error, details['source_tablespace'], details['destination_tablespace'], str(progress))
         else:
-            if phase_name == 'COMPLETE' or error == "Yes":
+            if phase_name == 'COMPLETE':
                 tb_table.add_row(str(details['batch_id']), str(details['migration_job_id']), str(
                     details['table_name']), details['schema_name'], phase_name, error, details['source_tablespace'], details['destination_tablespace'], time_taken)
     return tb_table
