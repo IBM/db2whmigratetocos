@@ -15,7 +15,7 @@ from db2whmigratetocos.queries import GET_THE_ROW_COUNT, GET_THE_ROW_COUNT_FROM_
 
 
 logger = logging.getLogger(__name__)
-ADM_MOVE_TABLE_CMD_DB2WOC = "CALL SYSPROC.ADMIN_MOVE_TABLE('{SCHEMANAME}','{TABLENAME}','{DEST_TBSPACE}','{INDEX_TBSPACE}','{DEST_TBSPACE}','','','','','{COPY_OPTS}','{OPTION}')"
+ADM_MOVE_TABLE_CMD_DB2WOC = "CALL SYSPROC.ADMIN_MOVE_TABLE('{SCHEMANAME}','{TABLENAME}','{DEST_TBSPACE}','{INDEX_TBSPACE}','{DEST_TBSPACE}','','','','','{COPY_OPTS}','{OPERATION}')"
 ADM_MOVE_TABLE_PHASE_ERROR_STATE = "SQL2104N"
 ADM_MOVE_TABLE_CLEANUP_ERROR_STATE = "SQL2105N"
 ADM_MOVE_TABLE_FIND_PHASE = "SELECT VALUE FROM SYSTOOLS.ADMIN_MOVE_TABLE WHERE KEY='STATUS' AND TABNAME='{TABLENAME}' AND TABSCHEMA='{SCHEMANAME}' WITH UR"
@@ -65,7 +65,7 @@ def define_logger_file(log_file_name):
     return log_file_handler
 
 
-def get_connection_string(user: str, password: str, hostname: str, port: str, database: str,dsn:str):
+def get_connection_string(connection_details):
     """_summary_
 
     Args:
@@ -81,20 +81,20 @@ def get_connection_string(user: str, password: str, hostname: str, port: str, da
 
     home_path = check_home_path()
     driver = "Driver={"+home_path.strip() + "/db2_cli_odbc_driver/odbc_cli/clidriver/lib/libdb2o.so};"
-    _dsn = "DSN="+dsn+";" if dsn is not None else ""
+    _dsn = "DSN=" + connection_details["dsn"] + ";" if connection_details["dsn"] is not None else ""
 
-    database = "Database="+database+";"
-    hostname = "Hostname="+hostname+";"
-    port = "Port="+port+";"
-    uid = "Uid="+user+";"
-    password = "Pwd="+password+";"
-    security = "Security=ssl;"
+    database = "Database=" + connection_details["database"] + ";"
+    hostname = "Hostname=" + connection_details["hostname"] + ";"
+    port = "Port=" + connection_details["port"] + ";"
+    uid = "Uid=" + connection_details["user_id"] + ";"
+    password = "Pwd=" + connection_details["password"] + ";"
+    security = "Security=ssl;" if connection_details["enable_ssl"] else ""
     protocol = "Protocol=TCPIP;"
     con_str = driver+_dsn+database+hostname+port+uid+password+security+protocol+"Authentication=SERVER;"+"SSLClientKeystoredb=/ssl/keystore.kdb;"+"SSLClientKeyStash=/ssl/keystore.sth;"
     return con_str
 
 
-def db2wh_pyodbc_connection(user: str, password: str, hostname: str, port: str, database: str,dsn:str) -> bool:
+def db2wh_pyodbc_connection(connection_details) -> bool:
     """_summary_
 
     Args:
@@ -109,8 +109,7 @@ def db2wh_pyodbc_connection(user: str, password: str, hostname: str, port: str, 
     """
     try:
         import pyodbc
-        connection_string = get_connection_string(
-            user, password, hostname, port, database,dsn)
+        connection_string = get_connection_string(connection_details)
         cnxn = pyodbc.connect(connection_string)
         return cnxn
     except Exception as e:
@@ -148,7 +147,7 @@ def find_adm_status_for_struck_table(user: str, password: str, hostname: str, po
         print(e)
 
 
-def find_adm_status_to_retry(user: str, password: str, hostname: str, port: str, database: str, tablename: str, schemaname: str, src_tbspace: str, dest_tbspace: str, report_file_name: str,dsn:str):
+def find_adm_status_to_retry(connection_details, table, dest_tbspace, report_file):
     """_summary_
 
     Args:
@@ -169,12 +168,16 @@ def find_adm_status_to_retry(user: str, password: str, hostname: str, port: str,
     import pyodbc
     try:
         table_phase = " "
-        connection_string = get_connection_string(
-            user, password, hostname, port, database,dsn)
+        connection_string = get_connection_string(connection_details)
         cnxn = pyodbc.connect(connection_string+"LONGDATACOMPAT=1;")
         conn = cnxn.cursor()
-        conn.execute(ADM_MOVE_TABLE_FIND_PHASE.format(TABLENAME=tablename,SCHEMANAME=schemaname))
+
+        conn.execute(ADM_MOVE_TABLE_FIND_PHASE.format(
+            TABLENAME=table["tablename"], SCHEMANAME=table["schema"])
+        )
+
         rows = conn.fetchall()
+
         for item in rows:
                 table_phase = item[0]
                 return table_phase
@@ -210,7 +213,10 @@ def cancel_terminate_admin_move_table(user: str, password: str, hostname: str, p
         print(e)
 
 
-def adm_move_table_phase(user: str, password: str, hostname: str, port: str, database: str, schemaname: str, tablename: str, phase: str, src_tbspace: str, dest_tbspace: str, report_file_name,dsn:str,index_tbspace:str,copy_opts:str):
+def adm_move_table_phase(
+        connection_details, table, dest_tbspace, index_tbspace, report_file, log_file, copy_opts,
+        phase
+):
     """_summary_
 
     Args:
@@ -230,27 +236,44 @@ def adm_move_table_phase(user: str, password: str, hostname: str, port: str, dat
         _type_: _description_
     """
     try:
+        schemaname = table["schema"]
+        tablename = table["tablename"]
+        src_tbspace = table["tablespace"]
+
         status = " "
-        cnxn = db2wh_pyodbc_connection(
-            user, password, hostname, port, database,dsn)
+        cnxn = db2wh_pyodbc_connection(connection_details)
         conn = cnxn.cursor()
-        conn.execute(ADM_MOVE_TABLE_CMD_DB2WOC.format(SCHEMANAME=schemaname, TABLENAME=tablename,
-                     OPTION=phase, SOURCE_TBSPACE=src_tbspace, DEST_TBSPACE=dest_tbspace,INDEX_TBSPACE=index_tbspace,COPY_OPTS=copy_opts))
+
+        conn.execute(ADM_MOVE_TABLE_CMD_DB2WOC.format(
+            SCHEMANAME=schemaname, TABLENAME=tablename, OPERATION=phase, SOURCE_TBSPACE=src_tbspace,
+            DEST_TBSPACE=dest_tbspace, INDEX_TBSPACE=index_tbspace, COPY_OPTS=copy_opts
+        ))
+
         rows = conn.fetchall()
+
         if rows is not None:
             logger.info(phase)
             logger.info(rows)
             log_for_the_phase = parse_adm_move_table_by_phase(rows, phase)
-            log_for_the_phase['SQL'] = ADM_MOVE_TABLE_CMD_DB2WOC.format(SCHEMANAME=schemaname, TABLENAME=tablename,
-                                                                        OPTION=phase, SOURCE_TBSPACE=src_tbspace, DEST_TBSPACE=dest_tbspace,INDEX_TBSPACE=index_tbspace,COPY_OPTS=copy_opts)
+
+            log_for_the_phase['SQL'] = ADM_MOVE_TABLE_CMD_DB2WOC.format(
+                SCHEMANAME=schemaname, TABLENAME=tablename, OPERATION=phase,
+                SOURCE_TBSPACE=src_tbspace, DEST_TBSPACE=dest_tbspace, INDEX_TBSPACE=index_tbspace,
+                COPY_OPTS=copy_opts
+            )
+
             if log_for_the_phase['STATUS'] == 'COMPLETE':
-                log_for_the_phase['COPY_TOTAL_ROWS'] = get_the_rows_moved_in_admin_move_table(schemaname, tablename, user, password, hostname, port, database,dsn)
-            with open(report_file_name, 'r+', encoding='utf-8') as file:
+                log_for_the_phase['COPY_TOTAL_ROWS'] = get_the_rows_moved_in_admin_move_table(
+                    connection_details, schemaname, tablename
+                )
+
+            with open(report_file, 'r+', encoding='utf-8') as file:
                 file_data = json.load(file)
                 file_data["phase_logs"].append(log_for_the_phase)
                 file_data["status"] = log_for_the_phase["STATUS"]
                 file.seek(0)
                 json.dump(file_data, file, indent=6)
+
             for item in rows:
                 if item[0] == 'INIT_START':
                     init_start = item[1]
@@ -258,17 +281,21 @@ def adm_move_table_phase(user: str, password: str, hostname: str, port: str, dat
                     status = item[1]
                 if item[0] == 'CLEANUP_END':
                     cleanup_end = item[1]
+
             return status
+
         else:
-            status = find_adm_status_to_retry(user, password, hostname, port, database,tablename,schemaname,src_tbspace,dest_tbspace,report_file_name,dsn)
+            status = find_adm_status_to_retry(connection_details, table, dest_tbspace, report_file)
             print("status is none")
             print(status)
+
             if status is not None:
-              return status
-            else:
-               return "NONE"
+                return status
+            return "NONE"
+
     except Exception as e:
         x, y = e.args
+
         if ADM_MOVE_TABLE_PHASE_ERROR_STATE in y:
             logger.info(x)
             logger.error("Error: %s", ADM_MOVE_TABLE_PHASE_ERROR_STATE)
@@ -277,13 +304,16 @@ def adm_move_table_phase(user: str, password: str, hostname: str, port: str, dat
                 "ERROR_CODE": ADM_MOVE_TABLE_PHASE_ERROR_STATE,
                 "MESSAGE": "Kindly check if the table is already in movement, cancel if needed"
             }
-            with open(report_file_name, 'r+', encoding='utf-8') as file:
+
+            with open(report_file, 'r+', encoding='utf-8') as file:
                 file_data = json.load(file)
                 file_data["phase_logs"].append(log_for_the_phase)
                 file_data["status"] = log_for_the_phase["STATUS"]
                 file.seek(0)
                 json.dump(file_data, file, indent=6)
+
             return "INPROGRESS"
+
         else:
             print(e)
             logger.info(e)
@@ -292,12 +322,14 @@ def adm_move_table_phase(user: str, password: str, hostname: str, port: str, dat
                 "STATUS": "ERROR",
                 "ERROR_CODE": str(e),
             }
-            with open(report_file_name, 'r+', encoding='utf-8') as file:
+
+            with open(report_file, 'r+', encoding='utf-8') as file:
                 file_data = json.load(file)
                 file_data["phase_logs"].append(log_for_the_phase)
                 file_data["status"] = "ERROR"
                 file.seek(0)
                 json.dump(file_data, file, indent=6)
+
             return "COMPLETE"
 
         # if ADM_MOVE_TABLE_CLEANUP_ERROR_STATE in y:
@@ -388,7 +420,10 @@ def parse_adm_move_table_by_phase(rows: any, phase: str):
         return swap_phase_details
 
 
-def adm_move_table_ops_db2woc(user: str, password: str, hostname: str, port: str, database: str, schemaname: str, tablename: str, status: str, src_tbspace: str, dest_tbspace: str, report_file_name: str, log_file_name: str,dsn:str,index_tbspace:str,copy_opts:str,runstats:bool):
+def adm_move_table_ops_db2woc(
+        connection_details, table, phase, dest_tbspace, index_tbspace, copy_opts, runstats,
+        report_file, log_file
+):
     """_summary_
 
     Args:
@@ -405,70 +440,85 @@ def adm_move_table_ops_db2woc(user: str, password: str, hostname: str, port: str
         report_file_name (str): _description_
         log_file_name (str): _description_
     """
-    log_file_handler = define_logger_file(log_file_name)
-    init_start = ""
-    cleanup_end = ""
-    while status != "COMPLETE":
-        logger.info("INIT Phase for {TABLENAME}".format(TABLENAME=tablename))
-        if status == "INIT":
-            status = adm_move_table_phase(
-                user, password, hostname, port, database, schemaname, tablename, "INIT", src_tbspace, dest_tbspace, report_file_name,dsn,index_tbspace,copy_opts)     
+    log_file_handler = define_logger_file(log_file)
+
+    while phase != "COMPLETE":
+        if phase == "INIT":
+            logger.info("INIT Phase for {TABLENAME}".format(TABLENAME=table["tablename"]))
+            status = adm_move_table_phase(connection_details, table, dest_tbspace, index_tbspace, report_file, log_file, copy_opts, phase)
+ 
         if status == "COPY":
-            logger.info("COPY Phase for {TABLENAME}".format(
-                TABLENAME=tablename))
-            status = adm_move_table_phase(
-                user, password, hostname, port, database, schemaname, tablename, "COPY", src_tbspace, dest_tbspace, report_file_name,dsn,index_tbspace,copy_opts)
-            status = find_adm_status_to_retry(user, password, hostname, port, database,tablename,schemaname,src_tbspace,dest_tbspace,report_file_name,dsn)
+            logger.info("COPY Phase for {TABLENAME}".format(TABLENAME=table["tablename"]))
+            status = adm_move_table_phase(connection_details, table, dest_tbspace, index_tbspace, report_file, log_file, copy_opts, phase)
+            status = find_adm_status_to_retry(connection_details, table, dest_tbspace, report_file)
+
         if status == "REPLAY":
-            logger.info("REPLAY Phase for {TABLENAME}".format(
-                TABLENAME=tablename))
-            status = adm_move_table_phase(
-                user, password, hostname, port, database, schemaname, tablename, "REPLAY", src_tbspace, dest_tbspace, report_file_name,dsn,index_tbspace,copy_opts)
-            logger.info("SWAP Phase for {TABLENAME}".format(
-                TABLENAME=tablename))
-            status = adm_move_table_phase(
-                user, password, hostname, port, database, schemaname, tablename, "SWAP", src_tbspace, dest_tbspace, report_file_name,dsn,index_tbspace,copy_opts)
-            status = find_adm_status_to_retry(user, password, hostname, port, database,tablename,schemaname,src_tbspace,dest_tbspace,report_file_name,dsn)
+            logger.info("REPLAY Phase for {TABLENAME}".format(TABLENAME=table["tablename"]))
+            status = adm_move_table_phase(connection_details, table, dest_tbspace, index_tbspace, report_file, log_file, copy_opts, phase)
+            logger.info("SWAP Phase for {TABLENAME}".format(TABLENAME=table["tablename"]))
+            status = adm_move_table_phase(connection_details, table, dest_tbspace, index_tbspace, report_file, log_file, copy_opts, phase)
+            status = find_adm_status_to_retry(connection_details, table, dest_tbspace, report_file)
+
             if status == "COMPLETE":
-                logger.info("Movement COMPLETE for {TABLENAME}".format(TABLENAME=tablename))
+                logger.info("Movement COMPLETE for {TABLENAME}".format(TABLENAME=table["tablename"]))
+
                 if runstats is True:
-                    logger.info("RUNSTATS for the table {TABLENAME} is triggered".format(TABLENAME=tablename)) 
-                    trigger_runstats_for_table(schemaname, tablename,user, password, hostname, port, database,dsn)
-                    logger.info("RUNSTATS for the table {TABLENAME} is completed ".format(TABLENAME=tablename)) 
+                    logger.info("RUNSTATS for the table {TABLENAME} is triggered".format(TABLENAME=table["tablename"])) 
+                    trigger_runstats_for_table(connection_details, table)
+                    logger.info("RUNSTATS for the table {TABLENAME} is completed ".format(TABLENAME=table["tablename"])) 
+
                 logger.removeHandler(log_file_handler)
                 break
+
             else:
-                logger.info("Error in SWAP Phase for  {TABLENAME}".format(
-                    TABLENAME=tablename))
+                logger.info("Error in SWAP Phase for  {TABLENAME}".format(TABLENAME=table["tablename"]))
                 logger.removeHandler(log_file_handler)
                 break
+
         if status == "INPROGRESS":
             print()
+
             if "USE_ADC" in copy_opts:
               adc="--use-adc"
             else:
              adc = "--no-use-adc"
+
             print("The migration for the table is already in progress")
             print("Run the following command to cancel the exisitng run")
-            print('''db2whmigratetocos cancel --schema-name {SCHEMANAME} --table-name {TABLENAME} --src-tablespace {SRC_TABLESPACE} --dest-tablespace {DEST_TABLESPACE} --user-id {USER}  --password '{PASSWORD}'  --hostname {HOSTNAME} --index-tbspace {INDEX_TABSPACE} {ADC} --log-file-name {LOG_FILE}  --report-file-name {REPORT_FILE}'''.
-                  format(SCHEMANAME = schemaname,TABLENAME=tablename,SRC_TABLESPACE=src_tbspace,DEST_TABLESPACE=dest_tbspace,USER=user,PASSWORD=password,HOSTNAME=hostname,INDEX_TABSPACE=index_tbspace,LOG_FILE=log_file_name,REPORT_FILE=report_file_name,ADC=adc))
+
+            print(
+                ('''db2whmigratetocos cancel --schema-name {SCHEMANAME} --table-name {TABLENAME} 
+                --src-tablespace {SRC_TABLESPACE} --dest-tablespace {DEST_TABLESPACE} 
+                --user-id {user_id}  --password '{password}'  --hostname {hostname} --index-tbspace 
+                {INDEX_TABSPACE} {ADC} --log-file-name {LOG_FILE}  
+                --report-file-name {REPORT_FILE}''').format(
+                    SCHEMANAME=table["schema"], TABLENAME=table["tablename"],
+                    SRC_TABLESPACE=table["tablespace"], DEST_TABLESPACE=dest_tbspace,
+                    INDEX_TABSPACE=index_tbspace, LOG_FILE=log_file,
+                    REPORT_FILE=report_file, ADC=adc, **connection_details
+                )
+            )
+
             print("Initiating the move for the next table to move if present ")
             print()
             logger.removeHandler(log_file_handler)
             break
-        if status == None or status == "None" or status == "NONE":
+
+        if status is None or status == "None" or status == "NONE":
             logger.removeHandler(log_file_handler)
             print("Initiating the move for the next table to move if present ")
             break
+
         if status == "ERROR":
             print("Please check the above error")
             logger.removeHandler(log_file_handler)
             print("Initiating the move for the next table to move if present ")
-            break   
+            break
+
     logger.removeHandler(log_file_handler) 
    
 
-def get_the_rows_moved_in_admin_move_table(schemaname, tablename, user_id, password, hostname, port, database,dsn):
+def get_the_rows_moved_in_admin_move_table(connection_details, schema, table):
     """_summary_
 
     Args:
@@ -483,11 +533,9 @@ def get_the_rows_moved_in_admin_move_table(schemaname, tablename, user_id, passw
     Returns:
         _type_: _description_
     """
-    cnxn = db2wh_pyodbc_connection(
-        user_id, password, hostname, port, database,dsn)
+    cnxn = db2wh_pyodbc_connection(connection_details)
     conn = cnxn.cursor()
-    conn.execute(GET_THE_ROW_COUNT.format(
-        TABLENAME=tablename, SCHEMANAME=schemaname))
+    conn.execute(GET_THE_ROW_COUNT.format(TABLENAME=table, SCHEMANAME=schema))
     rows = conn.fetchall()
     cnxn.close()
     for item in rows:
@@ -519,7 +567,7 @@ def get_the_rows_after_admin_move_table(schemaname, tablename, user_id, password
     for item in rows:
         return item[0]
 
-def trigger_runstats_for_table(schemaname, tablename, user_id, password, hostname, port, database,dsn):
+def trigger_runstats_for_table(connection_details, table):
     """_summary_
 
     Args:
