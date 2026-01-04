@@ -498,7 +498,7 @@ def get_connection_string(connection_details: dict):
     return con_str
 
 
-def db2wh_pyodbc_connection(connection_details: dict, test_con: bool) -> bool:
+def db2wh_pyodbc_connection(connection_details: dict, test_con: bool = False) -> bool:
     """_summary_
 
     Args:
@@ -650,14 +650,14 @@ def get_json_format_for_migration_run(table_details, phase, dest_tbspace, migrat
         "source_tablespace": table_details["tablespace"],
         "destination_tablespace": dest_tbspace,
         "status": "REQUESTED TO " + phase,
-        "table_name": table_details["tablename"],
-        "schema_name": table_details["schema"],
+        "tablename": table_details["tablename"],
+        "schema": table_details["schema"],
         "phase_logs": [],
     }
     return migration_meta_data
 
 
-def find_adm_status_by_tablename(user: str, password: str, hostname: str, port: str, database: str, tablename: str, dsn: str, enable_ssl: bool):
+def find_adm_status_by_tablename(connection_details, tablename):
     """_summary_
 
     Args:
@@ -673,9 +673,8 @@ def find_adm_status_by_tablename(user: str, password: str, hostname: str, port: 
     """
     import pyodbc
     try:
-        table_phase = " "
-        connection_string = get_connection_string(
-            user, password, hostname, port, database, dsn, enable_ssl)
+        table_phase = ""
+        connection_string = get_connection_string(connection_details)
         cnxn = pyodbc.connect(connection_string+"LONGDATACOMPAT=1;")
         conn = cnxn.cursor()
         conn.execute(ADM_MOVE_TABLE_FIND_PHASE.format(TABLENAME=tablename))
@@ -738,14 +737,13 @@ def add_latest_migration(all_migration_details: List[Dict], table_migration_data
     all_migration_details.append(table_migration_data)
 
 
-def list_migration_runs(migration_batches: List[Path]):
+def list_migration_runs(migration_batches: List[Path], active_runs: bool):
     """_summary_
 
     Args:
         migration_batches (_type_): _description_
     """
-    active_migration_job_details = []
-    completed_migration_job_details = []
+    migration_jobs = []
 
     for batch in migration_batches:
         tables_migration_report = batch.glob('*.json')
@@ -758,16 +756,19 @@ def list_migration_runs(migration_batches: List[Path]):
                 table_migration_data = json.load(f)
             table_migration_data["batch_id"] = batch.name
 
-            if table_migration_data['status'] != "COMPLETE":
-                add_latest_migration(active_migration_job_details, table_migration_data)
+            if active_runs:
+                if table_migration_data['status'] != "COMPLETE":
+                    add_latest_migration(migration_jobs, table_migration_data)
 
             else:
-                add_latest_migration(completed_migration_job_details, table_migration_data)
+                add_latest_migration(migration_jobs, table_migration_data)
 
-    return active_migration_job_details, completed_migration_job_details
+    return migration_jobs
 
 
-def parse_the_json_files_for_status(migration_job_details: list, user_id: str, password: str, hostname: str, port: str, database: str, table_header: list, active: bool, dsn:str, enable_ssl: bool) -> Table:
+def parse_the_json_files_for_status(
+        connection_details, active_runs, migration_jobs: List[Dict]
+) -> List[Dict]:
     """_summary_
 
     Args:
@@ -776,67 +777,59 @@ def parse_the_json_files_for_status(migration_job_details: list, user_id: str, p
     Returns:
         Table: _description_
     """
-    tb_table = Table()
-    for table_column_name in table_header:
-        tb_table.add_column(table_column_name, justify="center")
-    for details in migration_job_details:
-        init_time = " "
-        end_time = " "
-        init_bool = False
-        end_bool = False
-        phase_name = ""
-        time_taken = "-"
-        init_start = " "
-        cleanup_end = " "
-        original_rows = 0
-        target_rows = 0
-        progress = 0
-        if len(details['phase_logs']) > 0:
-            for phase in details['phase_logs']:
-                if phase['STATUS'] != 'COMPLETE' and phase['STATUS'] != 'INPROGRESS':
-                    phase_name = find_adm_status_by_tablename(
-                        user_id, password, hostname, port, database, str(details['table_name']), dsn, enable_ssl)
-                else:
-                    phase_name = details['status']
-                if phase['STATUS'] == "INIT":
-                    init_time = phase['INIT_START']
-                    init_bool = True
-                if phase['STATUS'] == "COMPLETE":
-                    end_time = phase['CLEANUP_END']
-                    end_bool = True
-                if init_bool and end_bool:
-                    init_start = datetime.strptime(
-                        init_time, "%Y-%m-%d-%H.%M.%S.%f")
-                    cleanup_end = datetime.strptime(
-                        end_time, "%Y-%m-%d-%H.%M.%S.%f")
-                    time_taken = str(
-                        int((cleanup_end - init_start).total_seconds()))
-        else:
-            phase_name = details['status']
-        error = "Yes" if details['status'] == "ERROR" else "No"
-        if active is True:
-            if phase_name != "COMPLETE" and "REQUESTED TO" not in phase_name:
-                target_table_name = get_the_original_tablename_from_admin_move_table(
-                    details['table_name'], user_id, password, hostname, port, database, dsn, enable_ssl)
-                target_rows = get_the_rows_moved_in_admin_move_table(
-                    details['schema_name'], target_table_name, user_id, password, hostname, port, database, dsn, enable_ssl)
-                original_rows = get_the_rows_moved_in_admin_move_table_using_count( details['schema_name'], details['table_name'], user_id, password, hostname, port, database, dsn, enable_ssl)
-                if original_rows == 0 or original_rows is None:
-                    original_rows = get_the_rows_moved_in_admin_move_table(
-                    details['schema_name'], details['table_name'], user_id, password, hostname, port, database, dsn, enable_ssl)
-                if target_rows is not None and original_rows is not None and int(original_rows) != 0:
-                  if target_rows <=original_rows:
-                    progress = str(math.ceil((100 - ((int(original_rows) - int(target_rows))/int(original_rows)) * 100))) + " %"
-                  else:
-                    progress = "TABLE_WRITE - Target "+ str(target_rows)
-                tb_table.add_row(str(details['batch_id']), str(details['migration_job_id']), str(details['table_name']), details['schema_name'],
-                                 phase_name, error, details['source_tablespace'], details['destination_tablespace'], str(progress))
-        else:
-            if phase_name == 'COMPLETE':
-                tb_table.add_row(str(details['batch_id']), str(details['migration_job_id']), str(
-                    details['table_name']), details['schema_name'], phase_name, error, details['source_tablespace'], details['destination_tablespace'], time_taken)
-    return tb_table
+    result = []
 
+    for job_details in migration_jobs:
+        tablename = job_details["tablename"]
+        schema = job_details["schema"]
+
+        if job_details["phase_logs"]:
+
+            for phase in job_details["phase_logs"]:
+                if phase['STATUS'] != 'COMPLETE' and phase['STATUS'] != 'INPROGRESS':
+                    phase_name = find_adm_status_by_tablename(connection_details, tablename)
+        else:
+            phase_name = job_details['status']
+
+        row = {
+            "batch_id": job_details["batch_id"],
+            "migration_job_id": job_details["migration_job_id"],
+            "schema": job_details['schema'],
+            "tablename": job_details['table_name'],
+            "source_tablespace": job_details["source_tablespace"],
+            "destination_tablespace": job_details["destination_tablespace"],
+            "phase_name": phase_name,
+            "error": "Yes" if job_details['status'] == "ERROR" else "No"
+        }
+
+        if phase_name != "COMPLETE" and "REQUESTED TO" not in phase_name:
+            target_table_name = get_the_original_tablename_from_admin_move_table(
+                connection_details, tablename
+            )
+            target_rows = get_the_rows_moved_in_admin_move_table(
+                connection_details, schema, target_table_name
+            )
+            original_rows = get_the_rows_moved_in_admin_move_table_using_count(
+                connection_details, schema, tablename
+            )
+
+            if original_rows == 0 or original_rows is None:
+                original_rows = get_the_rows_moved_in_admin_move_table(
+                    connection_details, schema, tablename
+                )
+
+            if target_rows is not None and original_rows is not None and int(original_rows) != 0:
+                if target_rows <= original_rows:
+                    progress = str(
+                        math.ceil(
+                            (100 - ((int(original_rows) - int(target_rows))/int(original_rows)) * 100)
+                        )
+                    ) + " %"
+
+                else:
+                    progress = "TABLE_WRITE - Target " + str(target_rows)
+
+            row["progess"]= progress
 
 # move utilities
 def round_robin_counter(n):
@@ -1166,7 +1159,7 @@ def export_the_data_as_csv(tables):
     return filename
 
 
-def get_the_original_tablename_from_admin_move_table(tablename, user_id, password, hostname, port, database, dsn, enable_ssl):
+def get_the_original_tablename_from_admin_move_table(connection_details, tablename):
     """_summary_
 
     Args:
@@ -1182,19 +1175,19 @@ def get_the_original_tablename_from_admin_move_table(tablename, user_id, passwor
         _type_: _description_
     """
     import pyodbc
-    connection_string = get_connection_string(
-        user_id, password, hostname, port, database, dsn, enable_ssl)
+    connection_string = get_connection_string(connection_details)
+
     cnxn = pyodbc.connect(connection_string+"LONGDATACOMPAT=1;")
     conn = cnxn.cursor()
-    conn.execute(ADM_MOVE_TABLE_FIND_TARGET_TABLE.format(
-        TABLENAME=tablename))
+    conn.execute(ADM_MOVE_TABLE_FIND_TARGET_TABLE.format(TABLENAME=tablename))
     rows = conn.fetchall()
     cnxn.close()
+
     for item in rows:
         return item[0]
 
 
-def get_the_rows_moved_in_admin_move_table(schemaname, tablename, user_id, password, hostname, port, database, dsn, enable_ssl: bool):
+def get_the_rows_moved_in_admin_move_table(connection_details, schema, tablename):
     """_summary_
 
     Args:
@@ -1209,18 +1202,16 @@ def get_the_rows_moved_in_admin_move_table(schemaname, tablename, user_id, passw
     Returns:
         _type_: _description_
     """
-    cnxn = db2wh_pyodbc_connection(
-        user_id, password, hostname, port, database, False, dsn, enable_ssl)
+    cnxn = db2wh_pyodbc_connection(connection_details)
     conn = cnxn.cursor()
-    conn.execute(GET_THE_ROW_COUNT.format(
-        TABLENAME=tablename, SCHEMANAME=schemaname))
-
+    conn.execute(GET_THE_ROW_COUNT.format(TABLENAME=tablename, SCHEMANAME=schema))
     rows = conn.fetchall()
     cnxn.close()
+
     for item in rows:
         return item[0]
 
-def get_the_rows_moved_in_admin_move_table_using_count(schemaname, tablename, user_id, password, hostname, port, database, dsn, enable_ssl: bool):
+def get_the_rows_moved_in_admin_move_table_using_count(connection_details, schema, tablename):
     """_summary_
 
     Args:
@@ -1235,13 +1226,14 @@ def get_the_rows_moved_in_admin_move_table_using_count(schemaname, tablename, us
     Returns:
         _type_: _description_
     """
-    cnxn = db2wh_pyodbc_connection(
-        user_id, password, hostname, port, database, False, dsn, enable_ssl)
+    cnxn = db2wh_pyodbc_connection(connection_details)
     conn = cnxn.cursor()
     conn.execute(GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY.format(
-        TABLENAME=tablename, SCHEMANAME=schemaname))
+        TABLENAME=tablename, SCHEMANAME=schema
+    ))
     rows = conn.fetchall()
     cnxn.close()
+
     for item in rows:
         return item[0]
 

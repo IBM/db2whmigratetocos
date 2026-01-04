@@ -463,31 +463,31 @@ def status(
         console.print(f"Log file: {log_directory_path / '<batch_id>/<job_id>-<schema>-<table>.log'}")
         console.print(f"Report file: {log_directory_path / '<batch_id>/<job_id>-<schema>-<table>.json'}")
 
-        active_migration_job_details, completed_migration_job_details = list_migration_runs(batches)
+        migration_jobs = list_migration_runs(batches, active_runs)
+
+        columns_key_map = [
+            ("BathchId", "batch_id"), ("JobId", "migration_job_id"), ("Table", "tablename"),
+            ("Schema", "schema"), ("Source", "source_tablespace"),
+            ("Destination", "destination_tablespace"), ("Phase", "phase_name"), ("Error", "error")
+        ]
 
         if active_runs:
-            if not active_migration_job_details:
+            if not migration_jobs:
                 console.print("No active migration runs currently in the instance.")
                 return
 
-            # TODO: Refactor "parse_the_json_files_for_status"
-            tb_table_migration_runs = parse_the_json_files_for_status(
-                active_migration_job_details, user_id, password, hostname, port, database,
-                STATUS_TABLE_HEADER_ACTIVE_RUNS, active_runs, dsn, enable_ssl
-            )
-
+            columns_key_map.append(("Progress", "progress"))
         else:
-            if not completed_migration_job_details:
+            if not migration_jobs:
                 console.print("No migration runs yet in the instance.")
                 return
 
-            # TODO: Refactor "parse_the_json_files_for_status"
-            tb_table_migration_runs = parse_the_json_files_for_status(
-                completed_migration_job_details, user_id, password, hostname, port, database, 
-                STATUS_TABLE_HEADER, active_runs, dsn, enable_ssl
-            )
+        parsed_data = parse_the_json_files_for_status(
+            migration_jobs, user_id, password, hostname, port, database,
+            STATUS_TABLE_HEADER_ACTIVE_RUNS, active_runs, dsn, enable_ssl
+        )
 
-        console.print(tb_table_migration_runs)
+        render_table(columns_key_map, parsed_data, len(parsed_data))
    
 @app.command()
 def cancel(

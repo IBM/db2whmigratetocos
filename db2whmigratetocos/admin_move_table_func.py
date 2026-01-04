@@ -147,7 +147,7 @@ def find_adm_status_for_struck_table(user: str, password: str, hostname: str, po
         print(e)
 
 
-def find_adm_status_to_retry(connection_details, table, dest_tbspace, report_file):
+def find_adm_status_to_retry(connection_details, table):
     """_summary_
 
     Args:
@@ -167,7 +167,7 @@ def find_adm_status_to_retry(connection_details, table, dest_tbspace, report_fil
     """
     import pyodbc
     try:
-        table_phase = " "
+        table_phase = ""
         connection_string = get_connection_string(connection_details)
         cnxn = pyodbc.connect(connection_string+"LONGDATACOMPAT=1;")
         conn = cnxn.cursor()
@@ -285,7 +285,7 @@ def adm_move_table_phase(
             return status
 
         else:
-            status = find_adm_status_to_retry(connection_details, table, dest_tbspace, report_file)
+            status = find_adm_status_to_retry(connection_details, table)
             print("status is none")
             print(status)
 
@@ -450,14 +450,14 @@ def adm_move_table_ops_db2woc(
         if status == "COPY":
             logger.info("COPY Phase for {TABLENAME}".format(TABLENAME=table["tablename"]))
             status = adm_move_table_phase(connection_details, table, dest_tbspace, index_tbspace, report_file, log_file, copy_opts, phase)
-            status = find_adm_status_to_retry(connection_details, table, dest_tbspace, report_file)
+            status = find_adm_status_to_retry(connection_details, table)
 
         if status == "REPLAY":
             logger.info("REPLAY Phase for {TABLENAME}".format(TABLENAME=table["tablename"]))
             status = adm_move_table_phase(connection_details, table, dest_tbspace, index_tbspace, report_file, log_file, copy_opts, phase)
             logger.info("SWAP Phase for {TABLENAME}".format(TABLENAME=table["tablename"]))
             status = adm_move_table_phase(connection_details, table, dest_tbspace, index_tbspace, report_file, log_file, copy_opts, phase)
-            status = find_adm_status_to_retry(connection_details, table, dest_tbspace, report_file)
+            status = find_adm_status_to_retry(connection_details, table)
 
             if status == "COMPLETE":
                 logger.info("Movement COMPLETE for {TABLENAME}".format(TABLENAME=table["tablename"]))
