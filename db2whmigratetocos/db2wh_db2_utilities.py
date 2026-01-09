@@ -19,8 +19,8 @@ import pandas as pd
 from rich.table import Table
 from rich.console import Console
 from db2whmigratetocos.admin_move_table_func import adm_move_table_ops_db2woc
-from db2whmigratetocos.constants import SCHEMA_CSV_COLUMNS, TABLESPACE_CSV_COLUMNS
-from db2whmigratetocos.queries import ADM_MOVE_ACTIVE_UTILITY, ADM_MOVE_STATUS, ADM_MOVE_TABLE_FIND_PHASE, GET_OBJECTSPACE_USING_SGNAME, GET_STORAGE_PATH_DEFINED_IN_INSTANCE, GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY, GET_USER_CREATED_INDEX, LIST_ALL_TABLES, LIST_SCHEMAS, LIST_TABLES_IN_SCHEMA, LIST_TABLES_IN_TSPACE, LIST_TBSPACE_BY_TABNAME, LIST_TBSPACES, TAB_SIZE, GET_THE_ROW_COUNT, ADM_MOVE_TABLE_FIND_TARGET_TABLE, LIST_PARENT_TABLES, CREATE_TABLESPACE
+from db2whmigratetocos.constants import PHASES, PHASES_MAP, SCHEMA_CSV_COLUMNS, TABLESPACE_CSV_COLUMNS
+from db2whmigratetocos.queries import ADM_MOVE_ACTIVE_UTILITY, ADM_MOVE_STATUS, ADM_MOVE_TABLE_FIND_PHASE, GET_OBJECTSPACE_USING_SGNAME, GET_STORAGE_PATH_DEFINED_IN_INSTANCE, GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY, GET_USER_CREATED_INDEX, LIST_ALL_TABLES, LIST_SCHEMAS, LIST_TABLES_IN_SCHEMA, LIST_TABLES_IN_TSPACE, LIST_TBSPACE_BY_TABNAME, LIST_TBSPACES, TAB_SIZE, GET_THE_ROW_COUNT, ADM_MOVE_TABLE_FIND_TARGET_TABLE, LIST_PARENT_TABLES, CREATE_TABLESPACE, TABLE_DETAILS
 
 
 console = Console()
@@ -722,7 +722,7 @@ def print_table_row(tables) -> Table:
 
 
 def add_latest_migration(all_migration_details: List[Dict], table_migration_data: Dict):
-    key_fields = ["source_tablespace", "destination_tablespace", "table_name", "schema_name"]
+    key_fields = ["source_tablespace", "destination_tablespace", "tablename", "schema"]
 
     for i, migration_detail in enumerate(all_migration_details):
 
@@ -766,9 +766,7 @@ def list_migration_runs(migration_batches: List[Path], active_runs: bool):
     return migration_jobs
 
 
-def parse_the_json_files_for_status(
-        connection_details, active_runs, migration_jobs: List[Dict]
-) -> List[Dict]:
+def parse_the_json_files_for_status(connection_details, migration_jobs: List[Dict]) -> List[Dict]:
     """_summary_
 
     Args:
@@ -795,11 +793,12 @@ def parse_the_json_files_for_status(
             "batch_id": job_details["batch_id"],
             "migration_job_id": job_details["migration_job_id"],
             "schema": job_details['schema'],
-            "tablename": job_details['table_name'],
+            "tablename": job_details['tablename'],
             "source_tablespace": job_details["source_tablespace"],
             "destination_tablespace": job_details["destination_tablespace"],
             "phase_name": phase_name,
-            "error": "Yes" if job_details['status'] == "ERROR" else "No"
+            "error": "Yes" if job_details['status'] == "ERROR" else "No",
+            "progress": "100%"
         }
 
         if phase_name != "COMPLETE" and "REQUESTED TO" not in phase_name:
@@ -824,14 +823,24 @@ def parse_the_json_files_for_status(
                         math.ceil(
                             (100 - ((int(original_rows) - int(target_rows))/int(original_rows)) * 100)
                         )
-                    ) + " %"
+                    ) + "%"
 
                 else:
                     progress = "TABLE_WRITE - Target " + str(target_rows)
 
-            row["progess"]= progress
+                row.update({"progess": progress})
+
+        result.append(row)
+
+    return result
 
 # move utilities
+def comma_string_to_list(delimited_string: str):
+    if not delimited_string:
+        return []
+
+    return delimited_string.split(",")
+
 def round_robin_counter(n):
     index = -1
 
@@ -868,7 +877,7 @@ def table_migration_status(connection_details, table_details):
     if not rows:
         return ("resume", phase)
 
-    return ("in_progress", phase)
+    return ("in_progress", PHASES_MAP[rows[0][0]])
 
 
 def move_table(
@@ -889,34 +898,31 @@ def move_table(
         port (_type_): _description_
         database (_type_): _description_
     """
-    selected_dest_tbspace = dest_tbspace[rr_callback()]
+    rr_index = rr_callback()
+    selected_dest_tbspace = dest_tbspace[rr_index]
     status, phase = table_migration_status(connection_details, table)
 
     if status == "in_progress":
-        console.log(
-            f"Migration already in progress. Table: {table['tablename']}, "
-            f"Schema: {table['schema']}, Phase: {phase}"
+        console.print(
+            f"Migration already in progress for table '{table['schema']}.{table['tablename']}'. "
+            f"The current phase is '{phase}'."
         )
         return
 
-    if status == "completed":
+    if status in ("completed", "not_started"):
         if table["tablespace"] == selected_dest_tbspace:
             console.log(
-                "Source and destination tablespace are same. "
-                f"Table: {table['tablename']}, Schema: {table['schema']}, "
-                f"Tablespace: {selected_dest_tbspace}"
+                "Source and destination tablespace are same ({selected_dest_tbspace}) for table "
+                f"'{table['schema']}.{table['tablename']}'."
             )
             return
 
         phase = "INIT"
 
-    elif status == "not_started":
-        phase = "INIT"
-
     else:
         console.print(
-            f"Detected an incomplete table migration. Resuming from phase {phase}. "
-            f"Table: {table['tablename']}, Schema: {table['schema']}"
+            f"Detected an incomplete table migration for table "
+            f"'{table['schema']}.{table['tablename']}'. Resuming from the phase {phase}"
         )
 
     batch_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
@@ -924,7 +930,6 @@ def move_table(
     batch_dir.mkdir(parents=True, exist_ok=True)
 
     migration_job_id = generate_uuid()
-
     report_file = (
         batch_dir / f"{migration_job_id}-{table['schema']}-{table['tablename']}.json"
     )
@@ -946,11 +951,15 @@ def move_table(
     )
     console.print(f"Logs: {log_file}, Report: {report_file}")
 
-    # TODO: work on index_tbspace
+    if not index_tbspace:
+        selected_index_tbspace = selected_dest_tbspace
+
+    else:
+        selected_index_tbspace = index_tbspace[rr_index]
 
     adm_move_table_ops_db2woc(
-        connection_details, table, phase, selected_dest_tbspace, index_tbspace, copy_opts, runstats,
-        report_file, log_file
+        connection_details, table, phase, selected_dest_tbspace, selected_index_tbspace, copy_opts,
+        runstats, report_file, log_file
     )
 
 
@@ -1015,15 +1024,17 @@ def validate_and_get_df_from_the_csv(csv_path):
     """
     with open(csv_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        csv_columns = reader.fieldnames
-        unavailable_columns = [col for col in TABLESPACE_CSV_COLUMNS if col not in csv_columns]
+        csv_columns = [csv_col.upper() for csv_col in reader.fieldnames]
+        unavailable_columns = [
+            col for col in TABLESPACE_CSV_COLUMNS if col.upper() not in csv_columns
+        ]
 
         if unavailable_columns:
             console.print(f"Missing columns in CSV: {', '.join(unavailable_columns)}")
             sys.exit(1)
 
         data = [
-            {ke.lower(): va for ke, va in row.item()}
+            {ke.lower(): va.upper() for ke, va in row.items()}
             for row in reader
         ]
 
@@ -1031,25 +1042,38 @@ def validate_and_get_df_from_the_csv(csv_path):
 
 
 def validate_tables(connection_details: dict, migration_tables: List[Dict]):
+    tablespaces = set()
+    schemas = set()
+    tablenames = set()
+
+    for td in migration_tables:
+        tablespaces.add(td["tablespace"])
+        schemas.add(td["schema"])
+        tablenames.add(td["tablename"])
+
+    tablespaces = ", ".join(f"'{ts}'" for ts in (tablespaces))
+    schemas = ", ".join(f"'{sc}'" for sc in (schemas))
+    tablenames = ", ".join(f"'{tn}'" for tn in (tablenames))
+
     cnxn = db2wh_pyodbc_connection(connection_details, False)
     conn = cnxn.cursor()
-    conn.execute(LIST_ALL_TABLES)
-    rows = conn.fetchall()
+    conn.execute(
+        TABLE_DETAILS.format(TBSPACES=tablespaces, TABSCHEMAS=schemas, TABNAMES=tablenames)
+    )
+    rows = {(ts.strip(), sc.strip(), tn.strip()) for ts, sc, tn in conn.fetchall()}
     cnxn.close()
 
-    all_tables = {
-        tuple(v.strip().lower() for v in row)
-        for row in rows
-    }
+    valid_tables, invalid_tables = [], []
+    for td in migration_tables:
+        (
+            valid_tables
+            if (td["tablespace"], td["schema"], td["tablename"]) in rows
+            else invalid_tables
+        ).append(td)
 
-    valid_tables = [
-        table_details for table_details in migration_tables
-        if (
-            table_details.get("tablespace", "").strip().lower,
-            table_details.get("schema", "").strip().lower,
-            table_details.get("tablename", "").strip().lower
-        ) in all_tables
-    ]
+    if invalid_tables:
+        invalid_tables = ", ".join(f"{td['schema']}.{td['tablename']}" for td in invalid_tables)
+        console.print(f"Invalid tables: {invalid_tables}")
 
     return valid_tables
 
@@ -1068,6 +1092,8 @@ def filter_migration_tables(
     columns_key_map = [
         ("Tablespace", "tablespace"), ("Schema", "schema"), ("Tablename", "tablename")
     ]
+
+    console.print("Filtering out invalid table.")
 
     for table_details in migration_tables:
         ts = table_details.get("tablespace")
@@ -1099,12 +1125,13 @@ def filter_migration_tables(
         if data:
             console.print(msg)
             render_table(columns_key_map, data, len(data))
+            console.print()
 
     print_filtered_tables("Following tables are already in object tablespace:", object_tablespace_tables)
-    print_filtered_tables("Following tables are having invalid tablespace:", invalid_tablespace_tables)
-    print_filtered_tables("Following tables are having invalid schema:", invalid_schema_tables)
+    print_filtered_tables("Following tables are having invalid/unsupported tablespace:", invalid_tablespace_tables)
+    print_filtered_tables("Following tables are having invalid/unsupported schema:", invalid_schema_tables)
     print_filtered_tables("Following tables are having skip tablespace:", skip_tablespace_tables)
-    print_filtered_tables("Following tables are having skip tablespace:", skip_schema_tables)
+    print_filtered_tables("Following tables are having skip schema:", skip_schema_tables)
 
     return valid_migration_tables
 
@@ -1343,24 +1370,22 @@ def create_tablespace(user_id: str, password: str, hostname: str, port: str, dat
 
 
 
-def check_for_user_created_indexes(user_id, password, hostname, port, database,tablename,schemaname, dsn:str, enable_ssl: bool):
+def check_for_user_created_indexes(connection_details, tablename, schemaname):
     import pyodbc
     try:
-        connection_string = get_connection_string(
-            user_id, password, hostname, port, database, dsn, enable_ssl)
+        connection_string = get_connection_string(connection_details)
         cnxn = pyodbc.connect(connection_string+"LONGDATACOMPAT=1;")
         conn = cnxn.cursor()
         conn.execute(GET_USER_CREATED_INDEX.format(TABLENAME=tablename,SCHEMANAME=schemaname))
         rows = conn.fetchall()
+
         index = False
         if len(rows) > 0:
            for item in rows:
                if ("SYS" not in item[1] or "IBM" not in item[1]) and "REG" in item[3]:
-                   index= True
-        if index:
-           return True
-        else:
-           return False
+                   index = True
+        return index
+
     except Exception as e:
         print(e)
 

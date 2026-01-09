@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 import traceback
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 
 import os
 from typing_extensions import Annotated
@@ -17,7 +17,7 @@ import pandas as pd
 import typer
 from db2whmigratetocos.admin_move_table_func import cancel_terminate_admin_move_table
 from db2whmigratetocos.constants import COPY_OPTIONS, STATUS_TABLE_HEADER, STATUS_TABLE_HEADER_ACTIVE_RUNS
-from db2whmigratetocos.db2wh_db2_utilities import check_for_user_created_indexes, check_home_path, check_if_logs_path_exist_else_create, create_a_log_directory_for_a_batch, create_tablespace, db2wh_pyodbc_connection, export_the_data_as_csv, filter_migration_tables, get_list_of_objectspaces, get_schema_in_instance, get_tables_cnt_under_tablespaces, get_tables_parent_tables, get_tables_under_schem_notabsize_in_db2woc, get_tables_under_schema_in_db2woc, get_tables_under_tablespace_in_db2woc, get_tables_under_tablespace_no_tabsize_in_db2woc, get_tablespaces_in_block_and_cos, get_tabname_schemaname_under_tablespace_in_db2woc, get_tbpsace_name_for_table, list_migration_runs, move_table, parse_the_json_files_for_status, render_table, print_export_tables_in_block_and_cos, print_table_row, round_robin_counter, validate_and_get_df_from_the_csv, validate_input_objects, validate_tables, validate_the_input_db2_objects
+from db2whmigratetocos.db2wh_db2_utilities import check_for_user_created_indexes, check_home_path, check_if_logs_path_exist_else_create, comma_string_to_list, create_a_log_directory_for_a_batch, create_tablespace, db2wh_pyodbc_connection, export_the_data_as_csv, filter_migration_tables, get_list_of_objectspaces, get_schema_in_instance, get_tables_cnt_under_tablespaces, get_tables_parent_tables, get_tables_under_schem_notabsize_in_db2woc, get_tables_under_schema_in_db2woc, get_tables_under_tablespace_in_db2woc, get_tables_under_tablespace_no_tabsize_in_db2woc, get_tablespaces_in_block_and_cos, get_tabname_schemaname_under_tablespace_in_db2woc, get_tbpsace_name_for_table, list_migration_runs, move_table, parse_the_json_files_for_status, render_table, print_export_tables_in_block_and_cos, print_table_row, round_robin_counter, tab_size_by_table_name, validate_and_get_df_from_the_csv, validate_input_objects, validate_tables, validate_the_input_db2_objects
 from db2whmigratetocos.fetch_tables_utilities import get_tables_by_schema, get_tables_by_tablespace
 from .db2whmigratetocos_install_prereq import db2whmigratetocos_init
 
@@ -111,7 +111,12 @@ def fetch(
 
             return
 
-        input_obj_list = "all" if objects == "all" else objects.split(",")
+        input_obj_list = (
+            "ALL"
+            if "ALL" in objects.upper()
+            else [obj.strip().upper() for obj in objects.split(",")]
+        )
+
         object_tablespaces = get_list_of_objectspaces(connection_details)
 
         # To render table columns in the specific order
@@ -241,25 +246,24 @@ def move(
         if log_directory_path == Path("."):
             log_directory_path = Path("logs")
 
-        console.print(f"Logs will be stored under {log_directory_path}.")
+        console.print(f"Logs will be stored under '{log_directory_path.resolve()}'.")
         log_directory_path.mkdir(parents=True, exist_ok=True)
 
         if not copy_opts:
-            copy_opts = COPY_OPTIONS
+            copy_opts = ",".join(COPY_OPTIONS)
 
         else:
-            copy_opts = copy_opts.split(",")
-            invalid_copy_opts = [opt for opt in copy_opts if opt not in COPY_OPTIONS]
+            invalid_copy_opts = [opt for opt in copy_opts.split(",") if opt not in COPY_OPTIONS]
 
             if invalid_copy_opts:
                 console.print(f"Unsupported copy options: {','.join(invalid_copy_opts)}")
-                console.print(f"Valid copy options: {','.join(COPY_OPTIONS)}")
+                console.print(f"Supported options: {', '.join(COPY_OPTIONS)}")
                 return
 
-        skip_tbspace = skip_tbspace.split(",")
-        skip_schema = skip_schema.split(",")
-        dest_tbspace = dest_tbspace.split(",")
-        index_tbspace = index_tbspace.split(",")
+        skip_tbspace = comma_string_to_list(skip_tbspace)
+        skip_schema = comma_string_to_list(skip_schema)
+        dest_tbspace = comma_string_to_list(dest_tbspace)
+        index_tbspace = comma_string_to_list(index_tbspace)
         object_tablespaces = get_list_of_objectspaces(connection_details)
         migration_tables = []
 
@@ -275,7 +279,17 @@ def move(
                 return
 
             migration_tables = validate_and_get_df_from_the_csv(csv_path)
+            if not migration_tables:
+                console.print("Input CSV file is empty.")
+                return
+
             migration_tables = validate_tables(connection_details, migration_tables)
+            if not migration_tables:
+                console.print(
+                    f"Validation failed: None of the tables specified in '{csv_path}' exist in "
+                    "the database."
+                )
+                return
 
         else:
             if scope not in ("tablespace", "schema", "table"):
@@ -295,40 +309,44 @@ def move(
                     console.print(f"Missing options: {', '.join(missing_options)}")
                     return
 
+                table_name = table_name.upper()
+                schema_name = schema_name.upper()
                 tablespace = get_tbpsace_name_for_table(connection_details, table_name, schema_name)
 
                 if not tablespace:
                     console.print(
-                        f"Tablespace not found for table '{table_name}', schema '{schema_name}'."
+                        f"Tablespace not found for table '{schema_name}.{table_name}'"
                     )
                     return
 
                 migration_tables.append({
-                    "tablename": table_name, "tablespace": tablespace, "schema": schema_name
+                    "tablename": table_name, "tablespace": tablespace, "schema": schema_name,
+                    "storage": "COS" if tablespace in object_tablespaces else "Block-Storage",
+                    "size": str(tab_size_by_table_name(connection_details, schema_name, table_name))
                 })
 
             else:
-                if not objects:
-                    console.print("Option '--objects' is not passed.")
-                    return
-
-                input_obj_list = "all" if objects == "all" else objects.split(",")
+                input_obj_list = (
+                    "ALL"
+                    if "ALL" in objects.upper()
+                    else [obj.strip().upper() for obj in objects.split(",")]
+                )
 
                 if scope == "tablespace":
                     migration_tables = get_tables_by_tablespace(
-                        connection_details, input_obj_list, "False", object_tablespaces
+                        connection_details, input_obj_list, True, object_tablespaces
                     )
 
                 else:
                     migration_tables = get_tables_by_schema(
-                        connection_details, input_obj_list, "False", object_tablespaces
+                        connection_details, input_obj_list, True, object_tablespaces
                     )
 
         # Resolve Referential Integrity
         if resolve_ri:
-            console.print("Resolving referential integrity.")
+            console.print("\nResolving referential integrity.")
             migration_tables = get_tables_parent_tables(
-                migration_tables, object_tablespaces, "False", connection_details
+                migration_tables, object_tablespaces, True, connection_details
             )
 
         migration_tables = filter_migration_tables(
@@ -348,9 +366,8 @@ def move(
         console.print("Tables after resolving referential integrity and filtering:")
         render_table(columns_key_map, migration_tables, len(migration_tables))
 
-        # Logic to migrate tables
-        get_index = round_robin_counter(len(dest_tbspace))
 
+        get_index = round_robin_counter(len(dest_tbspace))
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = [
                 executor.submit(
@@ -358,6 +375,8 @@ def move(
                     runstats, copy_opts, log_directory_path
                 ) for table in migration_tables
             ]
+
+            wait(futures)
 
     except Exception as e:
         print(e)
@@ -409,10 +428,9 @@ def status(
         )
         return
 
-    tables_in_block = []
-    tables_in_cos = []
-
     if scope == "tables":
+        tables_in_block = []
+        tables_in_cos = []
         available_tablespaces = get_tablespaces_in_block_and_cos(connection_details)
         object_tablespaces = get_list_of_objectspaces(connection_details)
 
@@ -426,16 +444,16 @@ def status(
             (tables_in_cos if tb_space in object_tablespaces else tables_in_block).append(
                 {
                     "tablespace": tb_space,
-                    "tables_count": tables_count
+                    "tables_count": str(tables_count)
                 }
             )
 
         columns_key_map = [("Tablespace", "tablespace"), ("Number of Tables", "tables_count")]
 
-        console.rule("[bold red]Tablespaces in Block")
+        console.print("Tablespaces in Block")
         render_table(columns_key_map, tables_in_block, len(tables_in_block))
 
-        console.rule("[bold red]Tablespaces in COS")
+        console.print("Tablespaces in COS")
         render_table(columns_key_map, tables_in_cos, len(tables_in_cos))
 
     else:
@@ -460,8 +478,12 @@ def status(
             "To check the complete logs and metrics, please find the log file "
             "in the respective locations:"
         )
-        console.print(f"Log file: {log_directory_path / '<batch_id>/<job_id>-<schema>-<table>.log'}")
-        console.print(f"Report file: {log_directory_path / '<batch_id>/<job_id>-<schema>-<table>.json'}")
+        console.print(
+            f"Log file: {log_directory_path.resolve() / '<batch_id>/<job_id>-<schema>-<table>.log'}"
+        )
+        console.print(
+            f"Report file: {log_directory_path.resolve() / '<batch_id>/<job_id>-<schema>-<table>.json'}"
+        )
 
         migration_jobs = list_migration_runs(batches, active_runs)
 
@@ -471,24 +493,16 @@ def status(
             ("Destination", "destination_tablespace"), ("Phase", "phase_name"), ("Error", "error")
         ]
 
-        if active_runs:
-            if not migration_jobs:
-                console.print("No active migration runs currently in the instance.")
-                return
-
-            columns_key_map.append(("Progress", "progress"))
-        else:
-            if not migration_jobs:
-                console.print("No migration runs yet in the instance.")
-                return
-
-        parsed_data = parse_the_json_files_for_status(
-            migration_jobs, user_id, password, hostname, port, database,
-            STATUS_TABLE_HEADER_ACTIVE_RUNS, active_runs, dsn, enable_ssl
-        )
+        parsed_data = parse_the_json_files_for_status(connection_details, migration_jobs)
+        columns_key_map = [
+            ("BathchId", "batch_id"), ("JobId", "migration_job_id"), ("Table", "tablename"),
+            ("Schema", "schema"), ("Source", "source_tablespace"),
+            ("Destination", "destination_tablespace"), ("Phase", "phase_name"), ("Error", "error"),
+            ("Progress", "progress")
+        ]
 
         render_table(columns_key_map, parsed_data, len(parsed_data))
-   
+
 @app.command()
 def cancel(
         schema_name: Annotated[str, typer.Option(help="Schema Name of the table")],
@@ -515,30 +529,43 @@ def cancel(
     To cancel a run for the table migration run 
     """
     try:
-        valid_dsn = ""
-        if dsn != None:
-         valid_dsn = dsn
-         conn_test = db2wh_pyodbc_connection(
-            user_id, password, hostname, port, database, True, valid_dsn, enable_ssl)
-        else:
-         valid_dsn = None
-         conn_test = db2wh_pyodbc_connection(
-            user_id, password, hostname, port, database, True, valid_dsn, enable_ssl)
-        print()
         console.print("Test Connect to the Db2 warehouse instance")
-        if conn_test:
-            if log_file_name and os.path.exists(log_file_name):
-                print("Removing the LOG File")
-                os.remove(log_file_name)
-            if report_file_name and os.path.exists(report_file_name):
-                print("Removing the JSON File")
-                os.remove(report_file_name)
-            if use_adc is False:
-                copy_opts = "COPY_USE_OTA,NO_STATS"
-            else:
-                copy_opts = "COPY_USE_OTA,USE_ADC,NO_STATS"
-            print("Cancelling the table migration")
-            cancel_terminate_admin_move_table(user_id, password, hostname, port, database, schema_name, table_name, "TERM", src_tablespace, dest_tablespace,dsn,index_tbspace,copy_opts)
-            cancel_terminate_admin_move_table(user_id, password, hostname, port, database, schema_name, table_name, "CANCEL", src_tablespace, dest_tablespace,dsn,index_tbspace,copy_opts)
+        connection_details = {
+            "user_id": user_id, "password": password, "hostname": hostname, "port": port,
+            "database": database, "dsn": dsn, "enable_ssl": enable_ssl
+        }
+
+        conn_status = db2wh_pyodbc_connection(connection_details, True)
+
+        if not conn_status:
+            console.print(
+                "Cannot connect to the Instance. Kindly check if the database is up and running."
+            )
+
+            return
+
+        if log_file_name and os.path.exists(log_file_name):
+            print("Removing the LOG File")
+            os.remove(log_file_name)
+
+        if report_file_name and os.path.exists(report_file_name):
+            print("Removing the JSON File")
+            os.remove(report_file_name)
+
+        if use_adc is False:
+            copy_opts = "COPY_USE_OTA,NO_STATS"
+        else:
+            copy_opts = "COPY_USE_OTA,USE_ADC,NO_STATS"
+
+        print("Cancelling the table migration")
+        cancel_terminate_admin_move_table(
+            connection_details, schema_name, table_name, "TERM", src_tablespace, dest_tablespace,
+            index_tbspace, copy_opts
+        )
+        cancel_terminate_admin_move_table(
+            connection_details, schema_name, table_name, "CANCEL", src_tablespace, dest_tablespace,
+            index_tbspace, copy_opts
+        )
+
     except Exception as e:
         print(e)

@@ -31,7 +31,7 @@ setuptools.setup(
     ],
     entry_points={
         "console_scripts": [
-            "db2whmigratetocos = db2whmigratetocos.app:app"
+            "db2whmigratetocos = db2whmigratetocos.main:app"
         ]
     },
 )

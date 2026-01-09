@@ -35,7 +35,7 @@ def get_tables_by_tablespace(
 
     tablespaces = (
         available_tablespaces
-        if input_obj_list == "all"
+        if input_obj_list == "ALL"
         else validate_input_objects(input_obj_list, available_tablespaces, "tablespaces")
     )
 
@@ -90,16 +90,16 @@ def get_tables_by_schema(
         console.print("No schemas are available.")
         return []
 
-    console.print("Listing the schemas\n")
+    console.print("Listing the schema\n")
 
     schemas = (
         available_schemas
-        if input_obj_list == "all"
+        if input_obj_list == "ALL"
         else validate_input_objects(input_obj_list, available_schemas, "schemas")
     )
 
     if not schemas:
-        console.print("No Valid schema found.")
+        console.print("All provided schemas are invalid.")
         return []
 
     tables = []
