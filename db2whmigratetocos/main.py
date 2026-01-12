@@ -3,33 +3,39 @@ Copyright IBM Corp. 2024 All Rights Reserved.
 Licensed Materials - Property of IBM
 """
 
-from pathlib import Path
+import os
 import sys
 import traceback
-from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed, wait
+from concurrent.futures import ThreadPoolExecutor, wait
+from pathlib import Path
 
-import os
-from typing_extensions import Annotated
-from rich.console import Console
-from rich.table import Table
-import pandas as pd
 import typer
-from db2whmigratetocos.admin_move_table_func import cancel_terminate_admin_move_table
-from db2whmigratetocos.constants import COPY_OPTIONS, STATUS_TABLE_HEADER, STATUS_TABLE_HEADER_ACTIVE_RUNS
-from db2whmigratetocos.db2wh_db2_utilities import check_for_user_created_indexes, check_home_path, check_if_logs_path_exist_else_create, comma_string_to_list, create_a_log_directory_for_a_batch, create_tablespace, db2wh_pyodbc_connection, export_the_data_as_csv, filter_migration_tables, get_list_of_objectspaces, get_schema_in_instance, get_tables_cnt_under_tablespaces, get_tables_parent_tables, get_tables_under_schem_notabsize_in_db2woc, get_tables_under_schema_in_db2woc, get_tables_under_tablespace_in_db2woc, get_tables_under_tablespace_no_tabsize_in_db2woc, get_tablespaces_in_block_and_cos, get_tabname_schemaname_under_tablespace_in_db2woc, get_tbpsace_name_for_table, list_migration_runs, move_table, parse_the_json_files_for_status, render_table, print_export_tables_in_block_and_cos, print_table_row, round_robin_counter, tab_size_by_table_name, validate_and_get_df_from_the_csv, validate_input_objects, validate_tables, validate_the_input_db2_objects
-from db2whmigratetocos.fetch_tables_utilities import get_tables_by_schema, get_tables_by_tablespace
+from rich.console import Console
+from typing_extensions import Annotated
+
+from db2whmigratetocos.admin_move_table_func import \
+    cancel_terminate_admin_move_table
+from db2whmigratetocos.constants import COPY_OPTIONS
+from db2whmigratetocos.db2wh_db2_utilities import (
+    comma_string_to_list, db2wh_pyodbc_connection, export_the_data_as_csv,
+    filter_migration_tables, get_all_tablespaces, get_data_from_csv,
+    get_list_of_objectspaces, get_tables_cnt_under_tablespaces,
+    get_tables_parent_tables, get_tbpsace_name_for_table, list_migration_runs,
+    move_table, parse_the_json_files_for_status, render_table,
+    round_robin_counter, tab_size_by_table_name, validate_tables)
+from db2whmigratetocos.fetch_tables_utilities import (get_tables_by_schema,
+                                                      get_tables_by_tablespace)
+
 from .db2whmigratetocos_install_prereq import db2whmigratetocos_init
 
 app = typer.Typer()
-
 console = Console()
 
 
 @app.callback()
 def callback():
     """
-   Db2warehouse on cloud migrate to COS from Block
+    Db2warehouse on cloud migrate to COS from Block
     """
 
 
@@ -74,17 +80,18 @@ def fetch(
         enable_ssl: Annotated[bool, typer.Option(help="Enable SSL encryption for the database connection.")] = False,
         resolve_ri: Annotated[bool, typer.Option(help="Option to resolve referential integrity")] = False):
     """
-    List the tables in tablespaces/schemas with size
+    List the tables in tablespaces/schemas
     \n
     This helps in listing the tables with schema and size in KB by Tablespace or Schema.\n
-    It lists upto 75 tables for each tablespace or schema mentioned in the list variable\n
+    It lists upto 75 tables for each tablespace or schema mentioned in the objects parameter\n
     The entire list can be exported to a csv\n
     \n
     -- scope -  tablespace/schema by which the tables needs to listed\n
     -- list  -  all/list of tablespaces/list of schema - the tables under the specified list will be listed\n
     -- detail / --no-detail - it prints the information regarding the table size, tablename and  schema \n
     -- export / --no-export - it exports the printed list to a CSV that can used for the MOVE command\n
-    --dsn -  Pass the DSN name if it is already configured
+    -- dsn -  Pass the DSN name if it is already configured\n
+    -- resolve_ri - Resolve referential integrity
     \n
     Command:
     \n
@@ -95,7 +102,7 @@ def fetch(
 
     """
     try:
-        console.print("Test Connect to the Db2 warehouse instance")
+        console.print("Testing connection to the Db2 warehouse instance")
 
         connection_details = {
             "user_id": user_id, "password": password, "hostname": hostname, "port": port,
@@ -176,7 +183,7 @@ def move(
         runstats: Annotated[bool, typer.Option(
             help="Execute RUNSTAT command")] = False,
         table_name: Annotated[str, typer.Option(
-            help="Move tables by tablespace/schema")] = "",
+            help="Provide the table name when moving a single table")] = "",
         dest_tbspace: Annotated[str, typer.Option(
             help="Destination tablespace in cos, where the data needs to be moved ")] = "OBJSTORESPACE1",
         index_tbspace : Annotated[str, typer.Option(
@@ -186,9 +193,9 @@ def move(
         user_id: Annotated[str, typer.Option(
             help="User Id to connect to Db2 warehouse Instance")] = "db2inst1",
         skip_schema: Annotated[str, typer.Option(
-            help="Skips an individual schema or a set of schmeas in the list of source tablespaces")] = "",
+            help="Skips an individual schema or a set of schmeas")] = "",
         skip_tbspace: Annotated[str, typer.Option(
-            help="Source tablespaces in block that needs to be skipped - none/comma seperated list of tablespaces")] = "",
+            help="Source tablespaces in block that needs to be skipped")] = "",
         database: Annotated[str, typer.Option(
             help="Database to be connected")] = "BLUDB",
         port: Annotated[str, typer.Option(help="Port to be used for Db2 warehouse Instance")] = "50001",
@@ -228,7 +235,7 @@ def move(
             console.print("Insufficient data. Provide one of: --objects, --csv-input, or --table.")
             return
 
-        console.print("Test Connect to the Db2 warehouse instance")
+        console.print("Testing connection to the Db2 warehouse instance")
 
         connection_details = {
             "user_id": user_id, "password": password, "hostname": hostname, "port": port,
@@ -239,7 +246,7 @@ def move(
 
         if not conn_status:
             console.print(
-                "Cannot connect to the Instance. Kindly check if the status if up and running."
+                "Cannot connect to the Instance. Kindly check if the status is up and running."
             )
             return
 
@@ -278,7 +285,7 @@ def move(
                 console.print(f"Input CSV file does not exist: {csv_path}")
                 return
 
-            migration_tables = validate_and_get_df_from_the_csv(csv_path)
+            migration_tables = get_data_from_csv(csv_path)
             if not migration_tables:
                 console.print("Input CSV file is empty.")
                 return
@@ -431,7 +438,7 @@ def status(
     if scope == "tables":
         tables_in_block = []
         tables_in_cos = []
-        available_tablespaces = get_tablespaces_in_block_and_cos(connection_details)
+        available_tablespaces = get_all_tablespaces(connection_details)
         object_tablespaces = get_list_of_objectspaces(connection_details)
 
         if not available_tablespaces:
@@ -526,7 +533,7 @@ def cancel(
         enable_ssl: Annotated[bool, typer.Option(help="Enable SSL encryption for the database connection.")] = False):
 
     """
-    To cancel a run for the table migration run 
+    To cancel a table migration run 
     """
     try:
         console.print("Test Connect to the Db2 warehouse instance")

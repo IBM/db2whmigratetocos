@@ -6,22 +6,36 @@
 """
 import csv
 import json
-from pathlib import Path
-import subprocess
+import math
 import os
+import subprocess
 import sys
 import uuid
-import math
-from collections import deque, defaultdict
+from collections import deque
 from datetime import datetime, timezone
-from typing import List, Dict
-import pandas as pd
-from rich.table import Table
-from rich.console import Console
-from db2whmigratetocos.admin_move_table_func import adm_move_table_ops_db2woc
-from db2whmigratetocos.constants import PHASES, PHASES_MAP, SCHEMA_CSV_COLUMNS, TABLESPACE_CSV_COLUMNS
-from db2whmigratetocos.queries import ADM_MOVE_ACTIVE_UTILITY, ADM_MOVE_STATUS, ADM_MOVE_TABLE_FIND_PHASE, GET_OBJECTSPACE_USING_SGNAME, GET_STORAGE_PATH_DEFINED_IN_INSTANCE, GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY, GET_USER_CREATED_INDEX, LIST_ALL_TABLES, LIST_SCHEMAS, LIST_TABLES_IN_SCHEMA, LIST_TABLES_IN_TSPACE, LIST_TBSPACE_BY_TABNAME, LIST_TBSPACES, TAB_SIZE, GET_THE_ROW_COUNT, ADM_MOVE_TABLE_FIND_TARGET_TABLE, LIST_PARENT_TABLES, CREATE_TABLESPACE, TABLE_DETAILS
+from pathlib import Path
+from typing import Dict, List
 
+import pandas as pd
+from rich.console import Console
+from rich.table import Table
+
+from db2whmigratetocos.admin_move_table_func import adm_move_table_ops_db2woc
+from db2whmigratetocos.constants import PHASES_MAP, TABLESPACE_CSV_COLUMNS
+from db2whmigratetocos.queries import (ADM_MOVE_ACTIVE_UTILITY,
+                                       ADM_MOVE_STATUS,
+                                       ADM_MOVE_TABLE_FIND_PHASE,
+                                       ADM_MOVE_TABLE_FIND_TARGET_TABLE,
+                                       GET_OBJECTSPACE_USING_SGNAME,
+                                       GET_STORAGE_PATH_DEFINED_IN_INSTANCE,
+                                       GET_THE_ROW_COUNT,
+                                       GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY,
+                                       GET_USER_CREATED_INDEX,
+                                       LIST_PARENT_TABLES, LIST_SCHEMAS,
+                                       LIST_TABLES_IN_SCHEMA,
+                                       LIST_TABLES_IN_TSPACE,
+                                       LIST_TBSPACE_BY_TABNAME, LIST_TBSPACES,
+                                       TAB_SIZE, TABLE_DETAILS)
 
 console = Console()
 
@@ -58,7 +72,7 @@ def run_command(command: str) -> str:
 
 # db2 utility functions
 
-def get_tablespaces_in_block_and_cos(connection_details):
+def get_all_tablespaces(connection_details):
     """
     Get the list tablespaces in the block storage and COS
 
@@ -173,38 +187,6 @@ def get_tables_under_schema_in_db2woc(connection_details: dict, schemaname: str,
         return total_estimate_size, tables_in_schema, table_cnt
     except Exception as e:
         print(e)
-
-def get_tables_under_schem_notabsize_in_db2woc(user: str, password: str, hostname: str, port: str, database: str, schemaname: str, dsn:str, enable_ssl: bool):
-    """_summary_
-
-    Args:
-        user (str): _description_
-        password (str): _description_
-        hostname (str): _description_
-        port (str): _description_
-        database (str): _description_
-        schemaname (str): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    try:
-        tables_in_schema = []
-        total_estimate_size = 0
-        cnxn = db2wh_pyodbc_connection(
-            user, password, hostname, port, database, False, dsn, enable_ssl)
-        conn = cnxn.cursor()
-        conn.execute(LIST_TABLES_IN_SCHEMA.format(SCHEMANAME=schemaname))
-        rows = conn.fetchall()
-        cnxn.close()
-        table_cnt = len(rows)
-        for item in rows:
-            tables_in_schema.append([item[0]])
-        return table_cnt, tables_in_schema
-    except Exception as e:
-        print(e)
-
-
 
 def tab_size_by_table_name(connection_details: dict, schemaname: str, tablename: str):
     """_summary_
@@ -339,40 +321,6 @@ def get_tables_parent_tables(
 
     return results
 
-def get_tables_under_tablespace_no_tabsize_in_db2woc(user: str, password: str, hostname: str, port: str, database: str, tablespace: str, dsn:str, enable_ssl: bool):
-    """_summary_
-
-    Args:
-        user (str): _description_
-        password (str): _description_
-        hostname (str): _description_
-        port (str): _description_
-        database (str): _description_
-        tablespace (str): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    try:
-        table_names_in_tablespace = []
-        cnxn = db2wh_pyodbc_connection(
-            user, password, hostname, port, database, False, dsn, enable_ssl)
-        conn = cnxn.cursor()
-        table_cnt = 0
-        conn.execute(LIST_TABLES_IN_TSPACE.format(TABLESPACE=tablespace))
-        rows = conn.fetchall()
-        cnxn.close()
-        with console.status(""):
-            for item in rows:
-                if "SYS" not in item[1]:
-                    if str(item[0]).endswith('t') is False:
-                        table_cnt = table_cnt + 1
-                        table_names_in_tablespace.append(
-                            [item[0], item[1]])
-        return table_names_in_tablespace, table_cnt
-    except Exception as e:
-        print(e)
-
 
 def get_tables_cnt_under_tablespaces(connection_details: dict, tablespace: str):
     """_summary_
@@ -400,37 +348,6 @@ def get_tables_cnt_under_tablespaces(connection_details: dict, tablespace: str):
                 if "SYS" not in item[1]:
                     table_cnt = table_cnt + 1
         return table_cnt
-    except Exception as e:
-        print(e)
-
-
-def get_tabname_schemaname_under_tablespace_in_db2woc(user: str, password: str, hostname: str, port: str, database: str, tablespace: str, dsn:str, enable_ssl: bool):
-    """_summary_
-
-    Args:
-        user (str): _description_
-        password (str): _description_
-        hostname (str): _description_
-        port (str): _description_
-        database (str): _description_
-        tablespace (str): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    try:
-        table_names_in_tablespace = []
-        cnxn = db2wh_pyodbc_connection(
-            user, password, hostname, port, database, False, dsn, enable_ssl)
-        conn = cnxn.cursor()
-        conn.execute(LIST_TABLES_IN_TSPACE.format(TABLESPACE=tablespace))
-        rows = conn.fetchall()
-        cnxn.close()
-        with console.status(""):
-            for item in rows:
-                if "SYS" not in item[1]:
-                    table_names_in_tablespace.append([item[0], item[1]])
-        return table_names_in_tablespace
     except Exception as e:
         print(e)
 
@@ -548,72 +465,6 @@ def generate_uuid():
     return str(generated_id).split("-", maxsplit=1)[0]
 
 
-def check_if_logs_path_exist_else_create(log_directory_base_path:str):
-    """_summary_
-
-    Returns:
-        _type_: _description_
-    """
-    try:
-        path = log_directory_base_path
-        is_exist = os.path.exists(path)
-        if is_exist:
-            return path
-        else:
-            os.makedirs(path, exist_ok=True)
-            return path
-    except Exception as e:
-        print(e)
-
-
-def create_log_directory_for_migration_run(log_directory_base_path,directory_name: str):
-    """_summary_
-
-    Args:
-        directory_name (str): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    try:
-        directory_path = check_if_logs_path_exist_else_create(log_directory_base_path)
-        migration_sub_directory = str(
-            directory_path)+"/"+directory_name.strip()
-        os.makedirs(migration_sub_directory, exist_ok=True)
-        return migration_sub_directory
-    except Exception as e:
-        print(e)
-
-
-def create_a_log_directory_for_a_batch(log_directory_base_path:str):
-    """_summary_
-    """
-    log_directory_name = ""
-    c = datetime.now()
-    current_time = c.strftime('%d%m%Y-%H%M%S')
-    directory_name = "batch-"+str(current_time)
-    log_directory_name = create_log_directory_for_migration_run(log_directory_base_path,directory_name)
-    return log_directory_name
-
-
-def create_files_for_migration(files: list[Path]):
-    """_summary_
-
-    Args:
-        directory_name (str): _description_
-        file_name (str): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    for fl in files:
-        if fl.suffix == ".json":
-            fl.write_text("{}")
-
-        if fl.suffix == ".log":
-            fl.write_text("")
-
-
 def unzip_the_adm_script():
     """_summary_
     """
@@ -631,7 +482,7 @@ def unzip_the_adm_script():
         print(e)
 
 
-def get_json_format_for_migration_run(table_details, phase, dest_tbspace, migration_job_id):
+def get_migration_meta_data(table_details, phase, dest_tbspace, migration_job_id):
     """_summary_
 
     Args:
@@ -703,23 +554,6 @@ def render_table(columns_key_map, data, limit=75):
 
 
 # status utilities
-
-def print_table_row(tables) -> Table:
-    """_summary_
-
-    Args:
-        tables (_type_): _description_
-
-    Returns:
-        Table: _description_
-    """
-    tb_table = Table()
-    tb_table.add_column("Tablespace", justify="center")
-    tb_table.add_column("Table count", justify="center")
-    for tablespace in tables:
-        tb_table.add_row(tablespace[0], str(tablespace[1]))
-    return tb_table
-
 
 def add_latest_migration(all_migration_details: List[Dict], table_migration_data: Dict):
     key_fields = ["source_tablespace", "destination_tablespace", "tablename", "schema"]
@@ -937,7 +771,7 @@ def move_table(
         batch_dir / f"{migration_job_id}-{table['schema']}-{table['tablename']}.log"
     )
 
-    migration_meta_data = get_json_format_for_migration_run(
+    migration_meta_data = get_migration_meta_data(
         table, phase, selected_dest_tbspace, migration_job_id
     )
 
@@ -985,35 +819,7 @@ def validate_input_objects(
     return validated_objects
 
 
-def validate_the_input_db2_objects(input_list, valid_list, obj_name):
-    """_summary_
-
-    Args:
-        input_list (_type_): _description_
-        valid_list (_type_): _description_
-        obj_name (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    invalid_list = []
-    validated_list = []
-    for obj in input_list:
-        if obj.strip() not in valid_list:
-            invalid_list.append(obj)
-    if len(invalid_list) > 0:
-        print(f"skipping invalid {obj_name}")
-        print(invalid_list)
-        for obj in valid_list:
-            if obj in invalid_list:
-                input_list.remove(obj)
-        validated_list = input_list
-    else:
-        validated_list = input_list
-    return validated_list
-
-
-def validate_and_get_df_from_the_csv(csv_path):
+def get_data_from_csv(csv_path):
     """_summary_
 
     Args:
@@ -1080,7 +886,7 @@ def validate_tables(connection_details: dict, migration_tables: List[Dict]):
 def filter_migration_tables(
         connection_details, migration_tables, skip_tbspace, skip_schema, object_tablespaces
 ):
-    available_tablespaces = get_tablespaces_in_block_and_cos(connection_details)
+    available_tablespaces = get_all_tablespaces(connection_details)
     available_schemas = get_schema_in_instance(connection_details)
     valid_migration_tables = []
     object_tablespace_tables = []
@@ -1136,54 +942,17 @@ def filter_migration_tables(
     return valid_migration_tables
 
 
-def print_export_tables_in_block_and_cos(tablespace_list, export_csv):
-    """_summary_
-
-    Args:
-        tablespace_list (_type_): _description_
-        export_csv (_type_): _description_
-    """
-    tbs_block = []
-    tbs_cos = []
-    tbs_block_table = Table(show_footer=False)
-    tbs_cos_table = Table(show_footer=False)
-    tbs_block_table.add_column(
-        "TABLESPACES in Block", justify="center", no_wrap=True)
-    tbs_cos_table.add_column(
-        "TABLESPACES in COS", justify="center", no_wrap=True)
-    for row in tablespace_list:
-        if "OBJ" in row:
-            tbs_cos_table.add_row(str(row))
-            tbs_cos.append(str(row))
-        else:
-            tbs_block_table.add_row(str(row))
-            tbs_block.append(str(row))
-    console.print(tbs_block_table)
-    console.print(tbs_cos_table)
-    if export_csv is True:
-        console.print(
-            "Exporting the tablespace list into CSV")
-        df_blk = pd.DataFrame(
-            tbs_block, columns=["tablespace"])
-        df_cos = pd.DataFrame(
-            tbs_cos, columns=["tablespace"])
-        blk_filename = "tbspaces-in-block-"+datetime.now().isoformat()+".csv"
-        cos_filename = "tbspaces-in-cos-"+datetime.now().isoformat()+".csv"
-        df_blk.to_csv(blk_filename, index=False)
-        df_cos.to_csv(cos_filename, index=False)
-        console.print(
-            "The tablespaces in block can be found in " + blk_filename)
-        console.print(
-            "The tablespaces in cos can be found in " + cos_filename)
-
-
-def export_the_data_as_csv(tables):
+def export_the_data_as_csv(data: List[Dict]):
     console.print("Exporting the data into CSV")
-    df = pd.DataFrame(tables)
-    filename = "db2whmigratetocos-tables-list-" + datetime.now().isoformat()+".csv"
-    df.to_csv(filename, index=False)
-    print(f"Data saved to CSV file: {filename}")
-    return filename
+    fieldnames = list(data[0].keys())
+    filename = Path(f"db2whmigratetocos-tables-list-{datetime.now(timezone.utc).isoformat()}.csv")
+
+    with open(filename, "w", newline="", encoding="utf-8") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(data)
+
+    console.print(f"Data saved to CSV file: {filename.resolve()}")
 
 
 def get_the_original_tablename_from_admin_move_table(connection_details, tablename):
@@ -1287,87 +1056,6 @@ def get_list_of_objectspaces(connection_details):
         return []
     except Exception as e:
         print(e)
-
-
-def create_tablespace(user_id: str, password: str, hostname: str, port: str, database: str, dsn:str, enable_ssl: bool, tbspaces: list) -> list:
-    """Creates tablespaces if are not already available.
-
-    Parameters
-    ----------
-    user_id : str
-        _description_
-    password : str
-        _description_
-    hostname : str
-        _description_
-    port : str
-        _description_
-    database : str
-        _description_
-    dsn : str
-        _description_
-    enable_ssl : bool
-        _description_
-    """
-    try:
-        cnxn = db2wh_pyodbc_connection(
-        user_id, password, hostname, port, database, False, dsn, enable_ssl
-    )
-
-        conn = cnxn.cursor()
-        conn.execute(GET_STORAGE_PATH_DEFINED_IN_INSTANCE)
-        rows = conn.fetchall()
-
-        storage_group = next((row[0] for row in rows if "DB2REMOTE" in row[1].upper()), None)
-
-        if storage_group is None:
-            console.print("No storage group is pointing to COS.")
-            sys.exit()
-
-        conn.execute(GET_OBJECTSPACE_USING_SGNAME.format(SGNAME=storage_group))
-        rows = conn.fetchall()
-
-        available_tbspaces = [tup[0].upper() for tup in rows]
-        nos_avl_tbspaces = len(available_tbspaces)
-
-        unavailable_tbspaces = list(set(tbspaces) - set(available_tbspaces))
-
-        if not unavailable_tbspaces:
-            console.print(f"All the tablespaces '{', '.join(tbspaces)}' are available")
-            return []
-
-        if nos_avl_tbspaces == 16:
-
-            console.print(
-                f"The number of tablespaces in storage group '{storage_group}' are 16. "
-                f"New tablespaces '{', '.join(tbspaces)}' can not be created."
-            )
-
-            sys.exit()
-
-        console.print("Creating tablespaces that are not available.")
-
-        for idx, tbspace in enumerate(unavailable_tbspaces):
-
-            if nos_avl_tbspaces == 16:
-
-                console.print(
-                    f"The number of tablespaces in storage group '{storage_group}' are 16. "
-                    f"Tablespaces '{', '.join(unavailable_tbspaces[idx:])}' can not be created. "
-                    f"Tables will be moved to tablespaces '{', '.join(unavailable_tbspaces[:idx])}'"
-                )
-
-                return unavailable_tbspaces[idx:]
-
-            conn.execute(CREATE_TABLESPACE.format(TABLESPACE=tbspace, STORAGE_GROUP=storage_group))
-            cnxn.commit()
-            nos_avl_tbspaces += 1
-
-        return []
-
-    except Exception as e:
-        print(e)
-
 
 
 def check_for_user_created_indexes(connection_details, tablename, schemaname):

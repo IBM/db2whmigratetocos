@@ -6,19 +6,22 @@
     Licensed Materials - Property of IBM
 
 """
-import datetime
 import json
-import subprocess
 import logging
+import subprocess
 import sys
 import time
 
-from db2whmigratetocos.constants import PHASES
-from db2whmigratetocos.queries import ADM_MOVE_ACTIVE_UTILITY, GET_THE_ROW_COUNT, GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY, RUNSTATS_FOR_TABLE
 from rich.console import Console
 
+from db2whmigratetocos.constants import PHASES
+from db2whmigratetocos.queries import (ADM_MOVE_ACTIVE_UTILITY,
+                                       GET_THE_ROW_COUNT,
+                                       GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY,
+                                       RUNSTATS_FOR_TABLE)
 
 logger = logging.getLogger(__name__)
+
 ADM_MOVE_TABLE_CMD_DB2WOC = "CALL SYSPROC.ADMIN_MOVE_TABLE('{SCHEMANAME}','{TABLENAME}','{DEST_TBSPACE}','{INDEX_TBSPACE}','{DEST_TBSPACE}','','','','','{COPY_OPTS}','{OPERATION}')"
 ADM_MOVE_TABLE_PHASE_ERROR_STATE = "SQL2104N"
 ADM_MOVE_TABLE_CLEANUP_ERROR_STATE = "SQL2105N"

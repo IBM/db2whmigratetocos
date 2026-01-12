@@ -5,16 +5,13 @@ Licensed Materials - Property of IBM
 
 
 from typing import Dict, List, Union
+
 from rich.console import Console
 
 from db2whmigratetocos.db2wh_db2_utilities import (
-    get_schema_in_instance,
-    get_tables_under_schema_in_db2woc,
-    get_tables_under_tablespace_in_db2woc,
-    get_tablespaces_in_block_and_cos,
-    render_table,
-    validate_input_objects,
-)
+    get_all_tablespaces, get_schema_in_instance,
+    get_tables_under_schema_in_db2woc, get_tables_under_tablespace_in_db2woc,
+    render_table, validate_input_objects)
 
 console = Console()
 
@@ -27,7 +24,7 @@ def get_tables_by_tablespace(
     console.print("Listing the tablespaces\n")
     console.print("Displaying till 75 tables for each tablespace")
 
-    available_tablespaces = get_tablespaces_in_block_and_cos(connection_details)
+    available_tablespaces = get_all_tablespaces(connection_details)
 
     if not available_tablespaces:
         console.print("No tablespaces are available.")
