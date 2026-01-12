@@ -129,7 +129,7 @@ def fetch(
         # To render table columns in the specific order
         columns_key_map = [
             ("Tablespace", "tablespace"), ("Storage", "storage"), ("Tablename", "tablename"),
-            ("Schema", "schema"), ("Table Size in KB", "size")
+            ("Schema", "schema"), ("Table Size in KB", "size"), ("Independent", "independent")
         ]
 
         if scope == "tablespace":
@@ -368,7 +368,7 @@ def move(
         columns_key_map = [
                 ("Tablespace", "tablespace"), ("Storage", "storage"),
                 ("Tablename", "tablename"), ("Schema", "schema"),
-                ("Table Size in KB", "size")
+                ("Table Size in KB", "size"), ("Independent", "independent")
             ]
         console.print("Tables after resolving referential integrity and filtering:")
         render_table(columns_key_map, migration_tables, len(migration_tables))
