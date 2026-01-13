@@ -309,15 +309,21 @@ def get_tables_parent_tables(
             cur
         )
 
-        for parent_details in parents:
-            sch_tab = (parent_details["schema"], parent_details["tablename"])
+        if not parents:
+            table_details["independent"] = True
 
-            if sch_tab not in visited:
-                visited.add(sch_tab)
-                results.append(parent_details)
+        else:
+            table_details["independent"] = False
 
-                # add the parent table to queue to check its dependencies
-                queue.append(parent_details)
+            for parent_details in parents:
+                sch_tab = (parent_details["schema"], parent_details["tablename"])
+
+                if sch_tab not in visited:
+                    visited.add(sch_tab)
+                    results.append(parent_details)
+
+                    # add the parent table to queue to check its dependencies
+                    queue.append(parent_details)
 
     return results
 

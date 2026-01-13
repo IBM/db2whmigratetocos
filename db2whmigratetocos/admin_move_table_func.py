@@ -368,9 +368,9 @@ def adm_move_table_ops_db2woc(
     tablename = table["tablename"]
     schema = table["schema"]
 
-    if phase == "CLEANUP":
-        logger.info("Executing 'CLEANUP' operation for %s.%s", schema, tablename)
-        console.print("Executing 'CLEANUP' operation for %s.%s", schema, tablename)
+    if phase in ("CLEANUP", "CANCEL"):
+        logger.info("Executing '%s' operation for %s.%s", phase, schema, tablename)
+        console.print(f"Executing '{phase}' operation for {schema}.{tablename}")
 
         status = adm_move_table_phase(
             connection_details, table, dest_tbspace, index_tbspace, report_file, log_file,
