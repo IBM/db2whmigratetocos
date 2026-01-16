@@ -35,7 +35,8 @@ from db2whmigratetocos.queries import (ADM_MOVE_ACTIVE_UTILITY,
                                        LIST_TABLES_IN_SCHEMA,
                                        LIST_TABLES_IN_TSPACE,
                                        LIST_TBSPACE_BY_TABNAME, LIST_TBSPACES,
-                                       TAB_SIZE, TABLE_DETAILS)
+                                       SYSTOOLS_ADMIN_MOVE_TABLE, TAB_SIZE,
+                                       TABLE_DETAILS)
 
 console = Console()
 
@@ -699,9 +700,18 @@ def table_migration_status(connection_details, table_details):
 
     cnxn = db2wh_pyodbc_connection(connection_details, False)
     conn = cnxn.cursor()
+
+    conn.execute(SYSTOOLS_ADMIN_MOVE_TABLE)
+    rows = conn.fetchall()
+
+    # When SYSTOOLS.ADMIN_MOVE_TABLE is not available
+    if not rows:
+        return ("not_started", None)
+
     conn.execute(ADM_MOVE_STATUS.format(SCHEMA=schema, TABLENAME=tablename))
     rows = conn.fetchall()
 
+    # When no record for table exist in SYSTOOLS.ADMIN_MOVE_TABLE
     if not rows:
         return ("not_started", None)
 
@@ -714,9 +724,11 @@ def table_migration_status(connection_details, table_details):
     rows = conn.fetchall()
     cnxn.close()
 
+    # When no record for table exist in SYSPROC.MON_GET_UTILITY
     if not rows:
         return ("resume", phase)
 
+    # When record for table exist in SYSPROC.MON_GET_UTILITY
     return ("in_progress", PHASES_MAP[rows[0][0]])
 
 
