@@ -101,7 +101,7 @@ def get_all_tablespaces(connection_details):
             ts = item[0].strip()
 
             if not any(tablespace in ts for tablespace in sys_tablespaces):
-                user_tablespaces_list.append(ts)
+                user_tablespaces_list.append(ts.strip())
 
         return user_tablespaces_list
     except Exception as e:
@@ -175,7 +175,7 @@ def get_tables_under_schema_in_db2woc(connection_details: dict, schemaname: str,
 
         with console.status(""):
             for item in rows:
-                tablename, tablespace = item[0], item[1]
+                tablename, tablespace = item[0].strip(), item[1].strip()
                 table_details = {"tablename": tablename, "tablespace": tablespace}
 
                 if detail:
@@ -243,7 +243,7 @@ def get_tables_under_tablespace_in_db2woc(connection_details:dict, tablespace: s
 
         with console.status(""):
             for item in rows:
-                tablename, schema = item[0], item[1]
+                tablename, schema = item[0].strip(), item[1].strip()
 
                 if "SYS" not in schema:
                     table_cnt += 1
@@ -261,15 +261,17 @@ def get_tables_under_tablespace_in_db2woc(connection_details:dict, tablespace: s
         print(e)
 
 def get_parent_table(table, schema, object_space_list, fetch_details, cursor):
-    # return list of tablespace tablename schema size and storage of parent table of table, schema
     parent_tables = []
 
     cursor.execute(LIST_PARENT_TABLES.format(TABNAME=table, SCHEMANAME=schema))
     rows = cursor.fetchall()
 
     for tablename, schema_name in rows:
+        tablename = tablename.strip()
+        schema_name = schema_name.strip()
+
         cursor.execute(LIST_TBSPACE_BY_TABNAME.format(TABNAME=tablename, SCHEMANAME=schema_name))
-        tablespace = cursor.fetchone()[0]
+        tablespace = cursor.fetchone()[0].strip()
         storage = "COS" if tablespace in object_space_list else "Block-Storage"
 
         table_details = {
@@ -858,7 +860,7 @@ def get_data_from_csv(csv_path):
             sys.exit(1)
 
         data = [
-            {ke.lower(): va.upper() for ke, va in row.items()}
+            {ke.strip().lower(): va.strip().upper() for ke, va in row.items()}
             for row in reader
         ]
 
