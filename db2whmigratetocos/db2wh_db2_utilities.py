@@ -644,7 +644,7 @@ def parse_the_json_files_for_status(connection_details, migration_jobs: List[Dic
             "progress": "100%"
         }
 
-        if phase_name != "COMPLETE" and "REQUESTED TO" not in phase_name:
+        if phase_name != "COMPLETE":
             target_table_name = get_the_original_tablename_from_admin_move_table(
                 connection_details, tablename
             )
