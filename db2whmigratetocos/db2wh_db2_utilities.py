@@ -671,7 +671,7 @@ def parse_the_json_files_for_status(connection_details, migration_jobs: List[Dic
                 else:
                     progress = "TABLE_WRITE - Target " + str(target_rows)
 
-                row.update({"progess": progress})
+                row.update({"progress": progress})
 
         result.append(row)
 
