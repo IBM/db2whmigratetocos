@@ -641,7 +641,6 @@ def parse_the_json_files_for_status(connection_details, migration_jobs: List[Dic
             "destination_tablespace": job_details["destination_tablespace"],
             "phase_name": phase_name,
             "error": "Yes" if job_details['status'] == "ERROR" else "No",
-            "progress": "100%"
         }
 
         if phase_name != "COMPLETE":
