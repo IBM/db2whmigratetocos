@@ -735,7 +735,7 @@ def table_migration_status(connection_details, table_details):
 
 def move_table(
         connection_details, table, dest_tbspace, index_tbspace, rr_callback, runstats, copy_opts,
-        log_directory_path
+        log_directory_path, end_time
 ):
     """_summary_
 
@@ -751,6 +751,14 @@ def move_table(
         port (_type_): _description_
         database (_type_): _description_
     """
+    if end_time and end_time <= datetime.now(tz=timezone.utc):
+        print(end_time)
+        console.print(
+            f"Time limit {end_time} reached. "
+            f"Skipping '{table['schema']}.{table['tablename']}'"
+        )
+        return
+
     rr_index = rr_callback()
     selected_dest_tbspace = dest_tbspace[rr_index]
     status, phase = table_migration_status(connection_details, table)
@@ -783,12 +791,8 @@ def move_table(
     batch_dir.mkdir(parents=True, exist_ok=True)
 
     migration_job_id = generate_uuid()
-    report_file = (
-        batch_dir / f"{migration_job_id}-{table['schema']}-{table['tablename']}.json"
-    )
-    log_file = (
-        batch_dir / f"{migration_job_id}-{table['schema']}-{table['tablename']}.log"
-    )
+    report_file = batch_dir / f"{migration_job_id}-{table['schema']}-{table['tablename']}.json"
+    log_file = batch_dir / f"{migration_job_id}-{table['schema']}-{table['tablename']}.log"
 
     migration_meta_data = get_migration_meta_data(
         table, phase, selected_dest_tbspace, migration_job_id
@@ -859,7 +863,7 @@ def get_data_from_csv(csv_path):
             sys.exit(1)
 
         data = [
-            {ke.strip().lower(): va.strip().upper() for ke, va in row.items()}
+            {ke.strip().lower(): va.strip().upper() for ke, va in row.items() if ke and va}
             for row in reader
         ]
 

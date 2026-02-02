@@ -5,8 +5,8 @@ Licensed Materials - Property of IBM
 
 import os
 import sys
-import traceback
 from concurrent.futures import ThreadPoolExecutor, wait
+from datetime import datetime, timezone
 from pathlib import Path
 
 import typer
@@ -200,7 +200,9 @@ def move(
             help="Database to be connected")] = "BLUDB",
         port: Annotated[str, typer.Option(help="Port to be used for Db2 warehouse Instance")] = "50001",
         enable_ssl: Annotated[bool, typer.Option(help="Enable SSL encryption for the database connection.")] = False,
-        workers: Annotated[int, typer.Option(help="Number of worker threads to use", min=1)] = 1):
+        workers: Annotated[int, typer.Option(help="Number of worker threads to use", min=1)] = 1,
+        end_time: Annotated[str, typer.Option(help="Stop move at this time (ISO 8601, defaults to UTC if no timezone offset provided). E.g. 2026-02-01T22:51:00-08:00")] = None
+        ):
         
     """
     Move the tablespaces to COS from Block
@@ -231,6 +233,18 @@ def move(
      
     """
     try:
+        parsed_end_time = None
+        if end_time:
+            parsed_end_time = datetime.fromisoformat(end_time)
+
+            if not parsed_end_time.tzinfo:
+                console.print(f"No timezone provided: '{end_time}', defaulting to UTC")
+                parsed_end_time = parsed_end_time.replace(tzinfo=timezone.utc)
+
+            if parsed_end_time <= datetime.now(tz=timezone.utc):
+                console.print(f"Time limit {parsed_end_time} reached. Exiting the process.")
+                return
+
         if not objects and not csv_input and scope != "table":
             console.print("Insufficient data. Provide one of: --objects, --csv-input, or --table.")
             return
@@ -379,7 +393,7 @@ def move(
             futures = [
                 executor.submit(
                     move_table, connection_details, table, dest_tbspace, index_tbspace, get_index,
-                    runstats, copy_opts, log_directory_path
+                    runstats, copy_opts, log_directory_path, parsed_end_time
                 ) for table in migration_tables
             ]
 
@@ -387,8 +401,6 @@ def move(
 
     except Exception as e:
         print(e)
-        print(traceback.format_exc())
-
 
 @app.command()
 def status(
