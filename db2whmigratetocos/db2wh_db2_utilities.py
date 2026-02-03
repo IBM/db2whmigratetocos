@@ -633,14 +633,14 @@ def parse_the_json_files_for_status(connection_details, migration_jobs: List[Dic
             phase_name = job_details['status']
 
         row = {
-            "batch_id": job_details["batch_id"],
-            "migration_job_id": job_details["migration_job_id"],
-            "schema": job_details['schema'],
-            "tablename": job_details['tablename'],
-            "source_tablespace": job_details["source_tablespace"],
-            "destination_tablespace": job_details["destination_tablespace"],
+            "batch_id": job_details.get("batch_id", ""),
+            "migration_job_id": job_details.get("migration_job_id", ""),
+            "schema": job_details.get('schema', ""),
+            "tablename": job_details.get('tablename', ""),
+            "source_tablespace": job_details.get("source_tablespace", ""),
+            "destination_tablespace": job_details.get("destination_tablespace", ""),
             "phase_name": phase_name,
-            "error": "Yes" if job_details['status'] == "ERROR" else "No",
+            "error": "Yes" if job_details.get("status", "").lower() == "error" else "No",
         }
 
         if phase_name != "COMPLETE":
