@@ -214,12 +214,12 @@ def cancel_terminate_admin_move_table(
         cnxn = db2wh_pyodbc_connection(connection_details)
         conn = cnxn.cursor()
         conn.execute(ADM_MOVE_TABLE_CMD_DB2WOC.format(SCHEMANAME=schemaname, TABLENAME=tablename,
-                     OPTION=phase, SOURCE_TBSPACE=src_tbspace, DEST_TBSPACE=dest_tbspace,INDEX_TBSPACE=index_tbspace,COPY_OPTS=copy_opts))
+                     OPERATION=phase, SOURCE_TBSPACE=src_tbspace, DEST_TBSPACE=dest_tbspace,INDEX_TBSPACE=index_tbspace,COPY_OPTS=copy_opts))
         rows = conn.fetchall()
         logger.info(phase)
         logger.info(rows)
     except Exception as e:
-        print(e)
+        print(f"error: {e}")
 
 
 def adm_move_table_phase(
