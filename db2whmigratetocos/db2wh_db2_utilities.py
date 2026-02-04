@@ -809,10 +809,17 @@ def move_table(
     console.print(f"Logs: {log_file}, Report: {report_file}")
 
     if not index_tbspace:
-        selected_index_tbspace = selected_dest_tbspace
+        idx_exists, idx = check_for_user_created_indexes(
+            connection_details, table['tablename'], table['schema']
+        )
 
+        if idx_exists:
+            selected_index_tbspace = idx
+        else:
+            selected_dest_tbspace = dest_tbspace
     else:
         selected_index_tbspace = index_tbspace[rr_index]
+
 
     adm_move_table_ops_db2woc(
         connection_details, table, phase, selected_dest_tbspace, selected_index_tbspace, copy_opts,
@@ -1090,13 +1097,10 @@ def check_for_user_created_indexes(connection_details, tablename, schemaname):
         conn.execute(GET_USER_CREATED_INDEX.format(TABLENAME=tablename,SCHEMANAME=schemaname))
         rows = conn.fetchall()
 
-        index = False
-        if len(rows) > 0:
-           for item in rows:
-               if ("SYS" not in item[1] or "IBM" not in item[1]) and "REG" in item[3]:
-                   index = True
-        return index
+        for row in rows:
+            return (True, row[0])
+
+        return (False, None)
 
     except Exception as e:
         print(e)
-
