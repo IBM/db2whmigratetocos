@@ -809,14 +809,15 @@ def move_table(
     console.print(f"Logs: {log_file}, Report: {report_file}")
 
     if not index_tbspace:
-        idx_exists, idx = check_for_user_created_indexes(
+        idx_exists, idx_tb_space = check_for_user_created_indexes(
             connection_details, table['tablename'], table['schema']
         )
 
         if idx_exists:
-            selected_index_tbspace = idx
+            selected_index_tbspace = idx_tb_space
         else:
-            selected_dest_tbspace = dest_tbspace
+            selected_dest_tbspace = table["tablespace"]
+
     else:
         selected_index_tbspace = index_tbspace[rr_index]
 
