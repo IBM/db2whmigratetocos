@@ -387,7 +387,6 @@ def move(
         console.print("Tables after resolving referential integrity and filtering:")
         render_table(columns_key_map, migration_tables, len(migration_tables))
 
-
         get_index = round_robin_counter(len(dest_tbspace))
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = [

@@ -600,7 +600,10 @@ def list_migration_runs(migration_batches: List[Path], active_runs: bool):
             table_migration_data["batch_id"] = batch.name
 
             if active_runs:
-                if table_migration_data['status'] != "COMPLETE":
+                if not any(
+                    st in table_migration_data.get("status", "").lower()
+                    for st in ("complete", "error")
+                ):
                     add_latest_migration(migration_jobs, table_migration_data)
 
             else:

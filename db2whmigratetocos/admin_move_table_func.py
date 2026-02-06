@@ -271,7 +271,7 @@ def adm_move_table_phase(
                 COPY_OPTS=copy_opts
             )
 
-            if log_for_the_phase['STATUS'] == 'COMPLETE':
+            if 'complete' in log_for_the_phase.get("STATUS", "").lower():
                 log_for_the_phase['COPY_TOTAL_ROWS'] = get_the_rows_moved_in_admin_move_table(
                     connection_details, schemaname, tablename
                 )
