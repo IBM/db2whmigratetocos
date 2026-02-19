@@ -7,7 +7,9 @@ password="changeit"
 usage() {
     echo "Usage: $0 --gskit-path <path> [default: ${gskit_path}] \\"
     echo "          --lib-gsk-dir <path> --password <password> [default: ${password}] \\"
-    echo "          --action <show|add> [default: ${action}]"
+    echo "          --action <show|add> [default: ${action}] \\"
+    echo "          --cert-path <path> \\"
+    echo "          --label <string>"
 }
 
 validate_ld_path () {
@@ -26,6 +28,8 @@ while [[ "$#" -gt 0 ]]; do
         --lib-gsk-dir) validate_ld_path $2; shift ;;
         --password) password="$2"; shift ;;
         --action) action="$2"; shift ;;
+        --cert-path) cert_path="$2"; shift ;;
+        --label) label="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; usage; exit 1 ;;
     esac
     shift
@@ -46,7 +50,7 @@ elif [[ $action == "add" ]]; then
         $gskit_path -keydb -create -db /ssl/keystore.kdb -pw $password -stash
     fi
 
-    $gskit_path -cert -add -db /ssl/keystore.kdb -pw $password -label "DigiCert G5 TLS RSA4096 SHA384 2021 CA1" -file DigiCertTLSRSA4096RootG5.crt
+    $gskit_path -cert -add -db /ssl/keystore.kdb -pw $password -label "$label" -file "$cert_path"
 
 else
     echo "Invalid action: $action"
