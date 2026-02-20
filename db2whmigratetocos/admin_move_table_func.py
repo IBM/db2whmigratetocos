@@ -346,7 +346,7 @@ def is_migration_active(connection_details, schema, tablename):
 
 def adm_move_table_ops_db2woc(
         connection_details, table, phase, dest_tbspace, index_tbspace, copy_opts, runstats,
-        report_file, log_file
+        report_file, log_file, cancel_on_error
 ):
     """_summary_
 
@@ -367,6 +367,7 @@ def adm_move_table_ops_db2woc(
     define_logger_file(log_file)
     tablename = table["tablename"]
     schema = table["schema"]
+    tablespace = table["tablespace"]
 
     if phase in ("CLEANUP", "CANCEL"):
         logger.info("Executing '%s' operation for %s.%s", phase, schema, tablename)
@@ -378,8 +379,10 @@ def adm_move_table_ops_db2woc(
         )
 
         if status in ("ERROR", ""):
-            logger.error("Error during %s phase.", phase)
-            sys.exit(1)
+            handle_on_error(
+                connection_details, phase, cancel_on_error, schema, tablename, tablespace,
+                dest_tbspace, index_tbspace, copy_opts, report_file, log_file
+            )
 
     else:
         for phs in PHASES[PHASES.index(phase):]:
@@ -392,8 +395,10 @@ def adm_move_table_ops_db2woc(
             )
 
             if status in ("ERROR", ""):
-                logger.error("Unexpected error during %s phase.", phase)
-                sys.exit(1)
+                handle_on_error(
+                    connection_details, phase, cancel_on_error, schema, tablename, tablespace,
+                    dest_tbspace, index_tbspace, copy_opts, report_file, log_file
+                )
 
             # Keep checking for migration status until the phase is completed
             while is_migration_active(connection_details, schema, tablename):
@@ -404,6 +409,32 @@ def adm_move_table_ops_db2woc(
     if runstats:
         logger.info("Executing RUNSTATS for %s.%s", schema, tablename)
         trigger_runstats_for_table(connection_details, schema, tablename)
+
+
+def handle_on_error(
+        connection_details, phase, cancel_on_error, schema, tablename, tablespace, dest_tbspace,
+        index_tbspace, copy_opts, report_file, log_file
+):
+    console.print(f"Unexpected error during {phase} phase for {schema}.{tablename}.")
+    logger.error("Error during %s phase for %s.%s.", phase, schema, tablename)
+
+    if cancel_on_error:
+        console.print(f"Terminating and cancelling {schema}.{tablename}")
+        cancel_terminate_admin_move_table(
+            connection_details, schema, tablename, "TERM", tablespace, dest_tbspace, index_tbspace,
+            copy_opts
+        )
+        cancel_terminate_admin_move_table(
+            connection_details, schema, tablename, "CANCEL", tablespace, dest_tbspace,
+            index_tbspace, copy_opts
+        )
+
+        for _file in (report_file, log_file):
+            new_path = _file.resolve().parent.with_name("cancelled") / _file.name
+            new_path.parent.mkdir(parents=True, exist_ok=True)
+            _file.rename(new_path)
+
+    sys.exit(1)
 
 def get_the_rows_moved_in_admin_move_table(connection_details, schema, table):
     """_summary_

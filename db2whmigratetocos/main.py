@@ -201,9 +201,10 @@ def move(
         port: Annotated[str, typer.Option(help="Port to be used for Db2 warehouse Instance")] = "50001",
         enable_ssl: Annotated[bool, typer.Option(help="Enable SSL encryption for the database connection.")] = False,
         workers: Annotated[int, typer.Option(help="Number of worker threads to use", min=1)] = 1,
-        end_time: Annotated[str, typer.Option(help="Stop move at this time (ISO 8601, defaults to UTC if no timezone offset provided). E.g. 2026-02-01T22:51:00-08:00")] = None
+        end_time: Annotated[str, typer.Option(help="Stop move at this time (ISO 8601, defaults to UTC if no timezone offset provided). E.g. 2026-02-01T22:51:00-08:00")] = None,
+        cancel_on_error: Annotated[bool, typer.Option(help="Flag to terminate and cancel table movement on error to restore the table to original state.")] = False
         ):
-        
+
     """
     Move the tablespaces to COS from Block
     \n
@@ -392,7 +393,7 @@ def move(
             futures = [
                 executor.submit(
                     move_table, connection_details, table, dest_tbspace, index_tbspace, get_index,
-                    runstats, copy_opts, log_directory_path, parsed_end_time
+                    runstats, copy_opts, log_directory_path, parsed_end_time, cancel_on_error
                 ) for table in migration_tables
             ]
 
@@ -485,7 +486,9 @@ def status(
             console.print(f"Log directory path does not exist: {log_directory_path.resolve()}")
             sys.exit(1)
 
-        batches = list(d for d in log_directory_path.iterdir() if d.is_dir())
+        batches = list(
+            d for d in log_directory_path.iterdir() if d.is_dir() and d.name != "cancelled"
+        )
 
         if not batches:
             console.print("No migrations done.")
@@ -561,14 +564,13 @@ def cancel(
             )
 
             return
-
-        if log_file_name and os.path.exists(log_file_name):
-            print("Removing the LOG File")
-            os.remove(log_file_name)
-
-        if report_file_name and os.path.exists(report_file_name):
-            print("Removing the JSON File")
-            os.remove(report_file_name)
+        
+        for _file in (log_file_name, report_file_name):
+            if _file and os.path.exists(log_file_name):
+                _file = Path(_file)
+                new_path = _file.resolve().parent.with_name("cancelled") / _file.name
+                new_path.parent.mkdir(parents=True, exist_ok=True)
+                _file.rename(new_path)
 
         if use_adc is False:
             copy_opts = "COPY_USE_OTA,NO_STATS"
