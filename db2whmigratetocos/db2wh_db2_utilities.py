@@ -211,7 +211,7 @@ def tab_size_by_table_name(connection_details: dict, schemaname: str, tablename:
         rows = conn.fetchall()
         cnxn.close()
         for item in rows:
-            return int(item[0])+int(item[1])+int(item[2])+int(item[3])+int(item[4])
+            return int(item[0])+int(item[1])+int(item[2])+int(item[3])+int(item[4])+int(item[5])
     except Exception as e:
         print(e)
 
