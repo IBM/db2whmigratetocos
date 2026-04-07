@@ -14,7 +14,7 @@ import time
 
 from rich.console import Console
 
-from db2whmigratetocos.constants import PHASES
+from db2whmigratetocos.constants import ADM_MOVE_UTL_CONFIGS, PHASES
 from db2whmigratetocos.queries import (ADM_MOVE_ACTIVE_UTILITY,
                                        GET_THE_ROW_COUNT,
                                        GET_THE_ROW_COUNT_FROM_TABLE_AFTER_COPY,
@@ -23,6 +23,7 @@ from db2whmigratetocos.queries import (ADM_MOVE_ACTIVE_UTILITY,
 logger = logging.getLogger(__name__)
 
 ADM_MOVE_TABLE_CMD_DB2WOC = "CALL SYSPROC.ADMIN_MOVE_TABLE('{SCHEMANAME}','{TABLENAME}','{DEST_TBSPACE}','{INDEX_TBSPACE}','{DEST_TBSPACE}','','','','','{COPY_OPTS}','{OPERATION}')"
+ADMIN_MOVE_TABLE_UTIL = "CALL SYSPROC.ADMIN_MOVE_TABLE_UTIL('{SCHEMANAME}','{TABLENAME}','{ACTION}','{KEY}','{VALUE}')"
 ADM_MOVE_TABLE_PHASE_ERROR_STATE = "SQL2104N"
 ADM_MOVE_TABLE_CLEANUP_ERROR_STATE = "SQL2105N"
 ADM_MOVE_TABLE_FIND_PHASE = "SELECT VALUE FROM SYSTOOLS.ADMIN_MOVE_TABLE WHERE KEY='STATUS' AND TABNAME='{TABLENAME}' AND TABSCHEMA='{SCHEMANAME}' WITH UR"
@@ -308,6 +309,32 @@ def adm_move_table_phase(
         return "ERROR"
 
 
+def configure_commit_size(connection_details, table, move_util_configs):
+    schemaname = table["schema"]
+    tablename = table["tablename"]
+
+    cnxn = db2wh_pyodbc_connection(connection_details)
+    conn = cnxn.cursor()
+
+    try:
+        for config in move_util_configs:
+            key, sep, value = config.partition("=")
+            if not sep:
+                continue
+
+            if key not in ADM_MOVE_UTL_CONFIGS:
+                continue
+
+            conn.execute(ADMIN_MOVE_TABLE_UTIL.format(
+                SCHEMANAME=schemaname, TABLENAME=tablename, ACTION="UPSERT", KEY=key,
+                VALUE=value
+            ))
+
+    except Exception as e:
+        print("Something went wrong: ", e)
+        sys.exit(1)
+
+
 def parse_adm_move_table_by_phase(rows: any, phase: str):
     """_summary_
 
@@ -346,7 +373,7 @@ def is_migration_active(connection_details, schema, tablename):
 
 def adm_move_table_ops_db2woc(
         connection_details, table, phase, dest_tbspace, index_tbspace, copy_opts, runstats,
-        report_file, log_file, cancel_on_error
+        report_file, log_file, cancel_on_error, move_util_configs
 ):
     """_summary_
 
@@ -403,6 +430,9 @@ def adm_move_table_ops_db2woc(
             # Keep checking for migration status until the phase is completed
             while is_migration_active(connection_details, schema, tablename):
                 time.sleep(10)
+
+            if phs == "INIT" and move_util_configs:
+                configure_commit_size(connection_details, table, move_util_configs)
 
     logger.info("Migration complete for %s.%s", schema, tablename)
 

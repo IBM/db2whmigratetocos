@@ -738,7 +738,7 @@ def table_migration_status(connection_details, table_details):
 
 def move_table(
         connection_details, table, dest_tbspace, index_tbspace, rr_callback, runstats, copy_opts,
-        log_directory_path, end_time, cancel_on_error
+        log_directory_path, end_time, cancel_on_error, move_util_configs
 ):
     """_summary_
 
@@ -827,7 +827,7 @@ def move_table(
 
     adm_move_table_ops_db2woc(
         connection_details, table, phase, selected_dest_tbspace, selected_index_tbspace, copy_opts,
-        runstats, report_file, log_file, cancel_on_error
+        runstats, report_file, log_file, cancel_on_error, move_util_configs
     )
 
 

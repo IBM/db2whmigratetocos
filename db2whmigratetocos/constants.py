@@ -18,3 +18,7 @@ PHASES_MAP = {
     "A": "Cancel", "C": "Copy", "I": "Init", "L": "Cleanup", "M": "Move", "R": "Replay",
     "S": "Swap", "V": "Verify" 
 }
+
+ADM_MOVE_UTL_CONFIGS = ("COMMIT_AFTER_N_ROWS", "DEEPCOMPRESSION_SAMPLE", "COPY_ARRAY_SIZE",
+                        "COPY_INDEXSCHEMA", "COPY_INDEXNAME", "REPLAY_MAX_ERR_RETRIES",
+                        "REPLAY_THRESHOLD", "REORG_USE_TEMPSPACE", "SWAP_MAX_RETRIES")

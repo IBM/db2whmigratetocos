@@ -8,6 +8,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import List
 
 import typer
 from rich.console import Console
@@ -202,7 +203,8 @@ def move(
         enable_ssl: Annotated[bool, typer.Option(help="Enable SSL encryption for the database connection.")] = False,
         workers: Annotated[int, typer.Option(help="Number of worker threads to use", min=1)] = 1,
         end_time: Annotated[str, typer.Option(help="Stop move at this time (ISO 8601, defaults to UTC if no timezone offset provided). E.g. 2026-02-01T22:51:00-08:00")] = None,
-        cancel_on_error: Annotated[bool, typer.Option(help="Flag to terminate and cancel table movement on error to restore the table to original state.")] = False
+        cancel_on_error: Annotated[bool, typer.Option(help="Flag to terminate and cancel table movement on error to restore the table to original state.")] = False,
+        move_util_configs: Annotated[List[str], typer.Option(help="Option to pass configurable MOVE parameters as key=value. E.g.: --move-util-configs 'COMMIT_AFTER_N_ROWS=256000' --move-util-configs 'DEEP_COMPRESSION_SAMPLE=30720'")] = None
         ):
 
     """
@@ -393,7 +395,8 @@ def move(
             futures = [
                 executor.submit(
                     move_table, connection_details, table, dest_tbspace, index_tbspace, get_index,
-                    runstats, copy_opts, log_directory_path, parsed_end_time, cancel_on_error
+                    runstats, copy_opts, log_directory_path, parsed_end_time, cancel_on_error,
+                    move_util_configs
                 ) for table in migration_tables
             ]
 
