@@ -166,45 +166,45 @@ def fetch(
 
 @app.command()
 def move(
-        password: Annotated[str, typer.Option(help="Password of the User ID")],
-        hostname: Annotated[str, typer.Option(help="Hostname of the Db2 warehouse Instance")],
-        objects: Annotated[str, typer.Option(
-            help="Source tablespace/schema in block storage - all/comma seperated list of tablespace/schema")] = "",
-        resolve_ri: Annotated[bool, typer.Option(help="Option to resolve referential integrity")] = False,
-        csv_input: Annotated[str, typer.Option(
-            help="CSV file as input to the move command as .csv file without the path")] = None,
-        dsn: Annotated[str, typer.Option(
-            help="Pass the DSN name configured in ODBC Driver Config File (odbcinst.ini)")] = None,
-        log_directory_path: Annotated[Path, typer.Option(
-            help="Pass the log directory base path to store the log files")] = Path("logs"),
-        scope: Annotated[str, typer.Option(
-            help="Move tables by tablespace/schema")] = "tablespace",
-        schema_name: Annotated[str, typer.Option(
-            help="Provide the schema name when moving a single table")] = "",
-        runstats: Annotated[bool, typer.Option(
-            help="Execute RUNSTAT command")] = False,
-        table_name: Annotated[str, typer.Option(
-            help="Provide the table name when moving a single table")] = "",
-        dest_tbspace: Annotated[str, typer.Option(
-            help="Destination tablespace in cos, where the data needs to be moved ")] = "OBJSTORESPACE1",
-        index_tbspace : Annotated[str, typer.Option(
-            help="Destination index tablespace in cos, where the index needs to be moved ")] = "",
-        copy_opts: Annotated[str, typer.Option(
-            help="Copy options to be passed.")] = "COPY_USE_OTA,NO_STATS",
-        user_id: Annotated[str, typer.Option(
-            help="User Id to connect to Db2 warehouse Instance")] = "db2inst1",
-        skip_schema: Annotated[str, typer.Option(
-            help="Skips an individual schema or a set of schmeas")] = "",
-        skip_tbspace: Annotated[str, typer.Option(
-            help="Source tablespaces in block that needs to be skipped")] = "",
-        database: Annotated[str, typer.Option(
-            help="Database to be connected")] = "BLUDB",
-        port: Annotated[str, typer.Option(help="Port to be used for Db2 warehouse Instance")] = "50001",
-        enable_ssl: Annotated[bool, typer.Option(help="Enable SSL encryption for the database connection.")] = False,
-        workers: Annotated[int, typer.Option(help="Number of worker threads to use", min=1)] = 1,
-        end_time: Annotated[str, typer.Option(help="Stop move at this time (ISO 8601, defaults to UTC if no timezone offset provided). E.g. 2026-02-01T22:51:00-08:00")] = None,
-        cancel_on_error: Annotated[bool, typer.Option(help="Flag to terminate and cancel table movement on error to restore the table to original state.")] = False,
-        move_util_configs: Annotated[List[str], typer.Option(help="Option to pass configurable MOVE parameters as key=value. E.g.: --move-util-configs 'COMMIT_AFTER_N_ROWS=256000' --move-util-configs 'DEEP_COMPRESSION_SAMPLE=30720'")] = None
+    password: Annotated[str, typer.Option(help="Password of the User ID")],
+    hostname: Annotated[str, typer.Option(help="Hostname of the Db2 warehouse Instance")],
+    objects: Annotated[str, typer.Option(
+        help="Source tablespace/schema in block storage - all/comma seperated list of tablespace/schema")] = "",
+    resolve_ri: Annotated[bool, typer.Option(help="Option to resolve referential integrity")] = False,
+    csv_input: Annotated[str, typer.Option(
+        help="CSV file as input to the move command as .csv file without the path")] = None,
+    dsn: Annotated[str, typer.Option(
+        help="Pass the DSN name configured in ODBC Driver Config File (odbcinst.ini)")] = None,
+    log_directory_path: Annotated[Path, typer.Option(
+        help="Pass the log directory base path to store the log files")] = Path("logs"),
+    scope: Annotated[str, typer.Option(
+        help="Move tables by tablespace/schema")] = "tablespace",
+    schema_name: Annotated[str, typer.Option(
+        help="Provide the schema name when moving a single table")] = "",
+    runstats: Annotated[bool, typer.Option(
+        help="Execute RUNSTAT command")] = False,
+    table_name: Annotated[str, typer.Option(
+        help="Provide the table name when moving a single table")] = "",
+    dest_tbspace: Annotated[str, typer.Option(
+        help="Destination tablespace in cos, where the data needs to be moved ")] = "OBJSTORESPACE1",
+    index_tbspace : Annotated[str, typer.Option(
+        help="Destination index tablespace in cos, where the index needs to be moved ")] = "",
+    copy_opts: Annotated[str, typer.Option(
+        help="Copy options to be passed.")] = "COPY_USE_OTA,NO_STATS",
+    user_id: Annotated[str, typer.Option(
+        help="User Id to connect to Db2 warehouse Instance")] = "db2inst1",
+    skip_schema: Annotated[str, typer.Option(
+        help="Skips an individual schema or a set of schmeas")] = "",
+    skip_tbspace: Annotated[str, typer.Option(
+        help="Source tablespaces in block that needs to be skipped")] = "",
+    database: Annotated[str, typer.Option(
+        help="Database to be connected")] = "BLUDB",
+    port: Annotated[str, typer.Option(help="Port to be used for Db2 warehouse Instance")] = "50001",
+    enable_ssl: Annotated[bool, typer.Option(help="Enable SSL encryption for the database connection.")] = False,
+    workers: Annotated[int, typer.Option(help="Number of worker threads to use", min=1)] = 1,
+    end_time: Annotated[str, typer.Option(help="Stop move at this time (ISO 8601, defaults to UTC if no timezone offset provided). E.g. 2026-02-01T22:51:00-08:00")] = None,
+    cancel_on_error: Annotated[bool, typer.Option(help="Flag to terminate and cancel table movement on error to restore the table to original state.")] = False,
+    move_util_configs: Annotated[List[str], typer.Option(help="Option to pass configurable MOVE parameters as key=value. E.g.: --move-util-configs 'COMMIT_AFTER_N_ROWS=256000' --move-util-configs 'DEEP_COMPRESSION_SAMPLE=30720'")] = None
         ):
 
     """

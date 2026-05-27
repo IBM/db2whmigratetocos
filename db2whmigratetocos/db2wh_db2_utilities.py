@@ -7,7 +7,6 @@
 import csv
 import json
 import math
-import os
 import subprocess
 import sys
 import uuid
@@ -16,12 +15,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
 
-import pandas as pd
 from rich.console import Console
 from rich.table import Table
 
 from db2whmigratetocos.admin_move_table_func import adm_move_table_ops_db2woc
-from db2whmigratetocos.constants import PHASES_MAP, TABLESPACE_CSV_COLUMNS
+from db2whmigratetocos.constants import PHASES_MAP, SYS_SCHEMAS, SYS_TABLESPACES, TABLESPACE_CSV_COLUMNS
 from db2whmigratetocos.queries import (ADM_MOVE_ACTIVE_UTILITY,
                                        ADM_MOVE_STATUS,
                                        ADM_MOVE_TABLE_FIND_PHASE,
@@ -95,12 +93,10 @@ def get_all_tablespaces(connection_details):
         rows = conn.fetchall()
         cnxn.close()
 
-        sys_tablespaces = ["SYS", "TS4CONSOLE", "TS4MONITOR", "BIGSQLCATUTILITY", "TEMP", "TMP"]
-
         for item in rows:
             ts = item[0].strip()
 
-            if not any(tablespace in ts for tablespace in sys_tablespaces):
+            if not any(tablespace in ts for tablespace in SYS_TABLESPACES):
                 user_tablespaces_list.append(ts.strip())
 
         return user_tablespaces_list
@@ -129,15 +125,11 @@ def get_schema_in_instance(connection_details: dict):
         rows = conn.fetchall()
         cnxn.close()
 
-        exclude_schemas = {
-            "SYS", "NULL", "TS4", "SQL", "IBMPDQ", "DEFAULT", "IBM_RTMON", "IBMCONSOLE"
-        }
-
         for item in rows:
             schema = item[0]
 
             if not any(
-                schema for exclude_schema in exclude_schemas if exclude_schema in schema
+                schema for exclude_schema in SYS_SCHEMAS if exclude_schema in schema
             ):
                 user_schemas_list.append(schema.strip())
 

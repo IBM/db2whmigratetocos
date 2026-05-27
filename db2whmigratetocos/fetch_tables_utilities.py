@@ -8,6 +8,7 @@ from typing import Dict, List, Union
 
 from rich.console import Console
 
+from db2whmigratetocos.constants import SYS_SCHEMAS, SYS_TABLESPACES
 from db2whmigratetocos.db2wh_db2_utilities import (
     get_all_tablespaces, get_schema_in_instance,
     get_tables_under_schema_in_db2woc, get_tables_under_tablespace_in_db2woc,
@@ -67,10 +68,11 @@ def get_tables_by_tablespace(
         tables.extend(
             {"tablespace": tb_space, "storage": tb_space_type, **table_details}
             for table_details in tables_details
+            if table_details["schema"].strip() not in SYS_SCHEMAS
         )
 
         console.print(f"The total number of tables in tablespace is {nos_tables}")
-        render_table(columns_key_map, tables_details)
+        render_table(columns_key_map, tables)
 
     return tables
 
@@ -125,6 +127,9 @@ def get_tables_by_schema(
             )
 
         for table_details in tables_details:
+            if table_details["tablespace"].strip() in SYS_TABLESPACES:
+                continue
+
             row = {
                 "tablespace": table_details["tablespace"],
                 "storage": (
@@ -140,6 +145,6 @@ def get_tables_by_schema(
             tables.append(row)
 
         console.print(f"The total number of tables in schema is {nos_tables}")
-        render_table(columns_key_map, tables_details)
+        render_table(columns_key_map, tables)
 
     return tables
