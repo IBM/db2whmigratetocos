@@ -28,6 +28,7 @@ setuptools.setup(
         "wheel",
         "pyodbc",
         "pandas",
+        "typing-extensions"
     ],
     entry_points={
         "console_scripts": [

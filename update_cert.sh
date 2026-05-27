@@ -41,6 +41,11 @@ if ! command -v $gskit_path >/dev/null 2>&1; then
 fi
 
 if [[ $action == "show" ]]; then
+    if [ ! -f /ssl/keystore.kdb ]; then
+        echo "Keystore not found: /ssl/keystore.kdb — has 'add' been run yet?"
+        exit 1
+    fi
+
     $gskit_path -cert -list -db /ssl/keystore.kdb -pw $password
 
 elif [[ $action == "add" ]]; then
