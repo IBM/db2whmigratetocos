@@ -314,6 +314,8 @@ def move(
                     "the database."
                 )
                 return
+            
+            sys.exit()
 
         else:
             if scope not in ("tablespace", "schema", "table"):
