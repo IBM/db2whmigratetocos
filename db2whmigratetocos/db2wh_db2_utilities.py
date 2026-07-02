@@ -866,7 +866,7 @@ def get_data_from_csv(csv_path):
             sys.exit(1)
 
         data = [
-            {ke.strip().lower(): va.strip() for ke, va in row.items() if ke and va}
+            {ke.strip().lower(): va.strip().upper() for ke, va in row.items() if ke and va}
             for row in reader
         ]
 
@@ -878,8 +878,6 @@ def validate_tables(connection_details: dict, migration_tables: List[Dict]):
     schemas = set()
     tablenames = set()
 
-    print(">>>>>>>>>>", tablespaces, schemas, tablenames)
-
     for td in migration_tables:
         tablespaces.add(td["tablespace"])
         schemas.add(td["schema"])
@@ -889,18 +887,12 @@ def validate_tables(connection_details: dict, migration_tables: List[Dict]):
     schemas = ", ".join(f"'{sc}'" for sc in (schemas))
     tablenames = ", ".join(f"'{tn}'" for tn in (tablenames))
 
-    print(">>>>>>>>>>", tablespaces, schemas, tablenames)
-
-    print(">>>>>>>>", TABLE_DETAILS.format(TBSPACES=tablespaces, TABSCHEMAS=schemas, TABNAMES=tablenames))
-
     cnxn = db2wh_pyodbc_connection(connection_details, False)
     conn = cnxn.cursor()
     conn.execute(
         TABLE_DETAILS.format(TBSPACES=tablespaces, TABSCHEMAS=schemas, TABNAMES=tablenames)
     )
     rows = {(ts.strip(), sc.strip(), tn.strip()) for ts, sc, tn in conn.fetchall()}
-
-    print(">>>>>>>", rows)
     cnxn.close()
 
     valid_tables, invalid_tables = [], []
