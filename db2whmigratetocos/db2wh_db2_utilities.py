@@ -866,7 +866,7 @@ def get_data_from_csv(csv_path):
             sys.exit(1)
 
         data = [
-            {ke.strip().lower(): va.strip().upper() for ke, va in row.items() if ke and va}
+            {ke.strip().lower(): va.strip() for ke, va in row.items() if ke and va}
             for row in reader
         ]
 
