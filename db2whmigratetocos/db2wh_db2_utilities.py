@@ -891,6 +891,8 @@ def validate_tables(connection_details: dict, migration_tables: List[Dict]):
 
     print(">>>>>>>>>>", tablespaces, schemas, tablenames)
 
+    print(">>>>>>>>", TABLE_DETAILS.format(TBSPACES=tablespaces, TABSCHEMAS=schemas, TABNAMES=tablenames))
+
     cnxn = db2wh_pyodbc_connection(connection_details, False)
     conn = cnxn.cursor()
     conn.execute(
