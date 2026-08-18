@@ -28,10 +28,11 @@ setuptools.setup(
         "wheel",
         "pyodbc",
         "pandas",
+        "typing-extensions"
     ],
     entry_points={
         "console_scripts": [
-            "db2whmigratetocos = db2whmigratetocos.app:app"
+            "db2whmigratetocos = db2whmigratetocos.main:app"
         ]
     },
 )
