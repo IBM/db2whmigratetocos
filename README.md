@@ -224,6 +224,9 @@ Each run of the move command will generate a directory containing the logs and r
 - --enable-ssl - Enable SSL for the connection
 - --resolve-ri - Resolve referential integrity
 - --workers - Number of parallel execution
+- --end-time - Stop move at this time (ISO 8601, defaults to UTC if no timezone offset provided). E.g. 2026-02-01T22:51:00-08:00
+- --cancel-on-error - Flag to terminate and cancel table movement on error to restore the table to original state.
+- --move-util-configs - Option to pass configurable MOVE parameters as key=value. E.g.: --move-util-configs 'COMMIT_AFTER_N_ROWS=256000' --move-util-configs 'DEEP_COMPRESSION_SAMPLE=30720'
 
 Note: The move command needs to be run in nohup mode to make sure the process does not stop if the client connection in the VM gets disconnected
 
